@@ -17,7 +17,7 @@ from typing import Any
 from azure.ai.inference.models import SystemMessage, UserMessage
 from dotenv import load_dotenv
 from PySide6.QtCore import QDir, QModelIndex, Qt, QThread, Signal
-from PySide6.QtGui import QAction, QFont, QKeySequence, QMouseEvent, QShowEvent, QCloseEvent
+from PySide6.QtGui import QAction, QFont, QKeySequence, QMouseEvent, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -53,6 +53,15 @@ if __package__ in {None, ""}:
     from src.ui.style import STYLE_SHEET
     from src.ui.html_generator import render_chat_history, get_copy_block
     from src.ui.chat_webview import ChatWebView
+    from src.ui.chat_storage import (
+        chat_file_path,
+        fresh_session_state,
+        list_saved_chats,
+        load_chat_session,
+        read_last_chat_id,
+        save_chat_session,
+        write_last_chat_id,
+    )
 
 else:
     from ..ui.interactive_terminal import InteractiveTerminal
@@ -66,6 +75,15 @@ else:
     from ..ui.style import STYLE_SHEET
     from ..ui.html_generator import render_chat_history, get_copy_block
     from ..ui.chat_webview import ChatWebView
+    from ..ui.chat_storage import (
+        chat_file_path,
+        fresh_session_state,
+        list_saved_chats,
+        load_chat_session,
+        read_last_chat_id,
+        save_chat_session,
+        write_last_chat_id,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +123,8 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._title_bar: TitleBar | None = None
         self._title_content_gap: QWidget | None = None
         self._chat_web_container: QWidget | None = None
+        self._chat_id: str = ""
+        self._suppress_chat_selector = False
 
         self.setWindowTitle("BabkaCode")
         self.setWindowIcon(build_app_icon())
@@ -117,6 +137,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._configure_window_chrome()
         self._apply_style()
         self._open_initial_file()
+        self._init_chat_persistence()
 
     def _configure_window_chrome(self) -> None:
         self.setWindowFlags(
@@ -244,6 +265,20 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._mode_selector.setCurrentText(self._mode)
         self._mode_selector.currentTextChanged.connect(self._handle_mode_changed)
 
+        chat_sel_label = QLabel("Chat:")
+        chat_sel_label.setObjectName("modeLabelSmall")
+        self._chat_selector = QComboBox(self)
+        self._chat_selector.setMinimumWidth(200)
+        self._chat_selector.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self._chat_selector.currentIndexChanged.connect(self._on_chat_selection_changed)
+
+        self._new_chat_button = QPushButton("New chat")
+        self._new_chat_button.setObjectName("inlineButton")
+        self._new_chat_button.setFixedHeight(26)
+        self._new_chat_button.clicked.connect(self._new_chat_clicked)
+
         chat_hdr = QFrame(self)
         chat_hdr.setObjectName("chatHeaderFrame")
         chat_hdr.setFixedHeight(panel_header_h)
@@ -251,6 +286,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         ch_layout.setContentsMargins(12, 0, 12, 0)
         ch_layout.setSpacing(8)
         ch_layout.addWidget(chat_hdr_label, 1)
+        ch_layout.addWidget(chat_sel_label)
+        ch_layout.addWidget(self._chat_selector, 0)
+        ch_layout.addWidget(self._new_chat_button, 0)
         mode_lbl = QLabel("Mode:")
         mode_lbl.setObjectName("modeLabelSmall")
         ch_layout.addWidget(mode_lbl)
@@ -385,9 +423,6 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             self._native_chrome_applied = True
             self._apply_native_styles()
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt callback signature
-        super().closeEvent(event)
-
     def nativeEvent(self, eventType, message):  # noqa: N802 - Qt callback signature
         if sys.platform == "win32":
             result = self._process_native_event(message)
@@ -481,6 +516,111 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             if child.is_file():
                 self._open_file(child)
                 return
+
+    def _init_chat_persistence(self) -> None:
+        last = read_last_chat_id(self._workspace)
+        try:
+            if last and chat_file_path(self._workspace, last).is_file():
+                state = load_chat_session(self._workspace, last)
+                self._apply_chat_state(state)
+            elif list_saved_chats(self._workspace):
+                cid = list_saved_chats(self._workspace)[0][0]
+                state = load_chat_session(self._workspace, cid)
+                self._apply_chat_state(state)
+                write_last_chat_id(self._workspace, cid)
+            else:
+                state = fresh_session_state(self._mode)
+                self._apply_chat_state(state)
+                self._save_current_chat_session()
+                write_last_chat_id(self._workspace, self._chat_id)
+        except (OSError, ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+            logger.warning("Chat load failed, starting fresh: %s", exc)
+            state = fresh_session_state(self._mode)
+            self._apply_chat_state(state)
+        self._refresh_chat_selector(select_id=self._chat_id)
+
+    def _apply_chat_state(self, state: dict[str, Any]) -> None:
+        self._chat_id = str(state["chat_id"])
+        self._mode = str(state["mode"])
+        self._messages = list(state["messages"])
+        self._chat_events = list(state["chat_events"])
+        self._collapsed_blocks = set(state["collapsed_blocks"])
+        self._next_block_id = max(1, int(state["next_block_id"]))
+        self._mode_selector.blockSignals(True)
+        self._mode_selector.setCurrentText(self._mode)
+        self._mode_selector.blockSignals(False)
+        self._update_chat_placeholder()
+        self._render_chat_history()
+
+    def _save_current_chat_session(self) -> None:
+        if not self._chat_id:
+            return
+        try:
+            save_chat_session(
+                self._workspace,
+                chat_id=self._chat_id,
+                mode=self._mode,
+                messages=self._messages,
+                chat_events=self._chat_events,
+                collapsed_blocks=self._collapsed_blocks,
+                next_block_id=self._next_block_id,
+            )
+        except OSError as exc:
+            logger.warning("Failed to save chat: %s", exc)
+
+    def _refresh_chat_selector(self, *, select_id: str | None = None) -> None:
+        self._suppress_chat_selector = True
+        try:
+            self._chat_selector.clear()
+            sid = select_id or self._chat_id
+            for chat_id, _mtime, title in list_saved_chats(self._workspace):
+                self._chat_selector.addItem(title, chat_id)
+            idx = self._chat_selector.findData(sid)
+            if idx >= 0:
+                self._chat_selector.setCurrentIndex(idx)
+            elif self._chat_selector.count() > 0 and sid:
+                # Session id not yet listed (e.g. race): show newest
+                self._chat_selector.setCurrentIndex(0)
+        finally:
+            self._suppress_chat_selector = False
+
+    def _on_chat_selection_changed(self, index: int) -> None:
+        if self._suppress_chat_selector or index < 0:
+            return
+        chat_id = self._chat_selector.itemData(index)
+        if not chat_id or chat_id == self._chat_id:
+            return
+        if self._worker_thread is not None:
+            QMessageBox.warning(
+                self,
+                "Chat",
+                "Дождитесь завершения ответа агента перед сменой чата.",
+            )
+            self._refresh_chat_selector(select_id=self._chat_id)
+            return
+        try:
+            self._save_current_chat_session()
+            state = load_chat_session(self._workspace, chat_id)
+            self._apply_chat_state(state)
+            write_last_chat_id(self._workspace, chat_id)
+        except (OSError, ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+            QMessageBox.critical(self, "Chat", str(exc))
+            self._refresh_chat_selector(select_id=self._chat_id)
+
+    def _new_chat_clicked(self) -> None:
+        if self._worker_thread is not None:
+            QMessageBox.warning(
+                self,
+                "Chat",
+                "Дождитесь завершения ответа агента перед созданием нового чата.",
+            )
+            return
+        self._save_current_chat_session()
+        state = fresh_session_state(self._mode)
+        self._apply_chat_state(state)
+        self._save_current_chat_session()
+        write_last_chat_id(self._workspace, self._chat_id)
+        self._refresh_chat_selector(select_id=self._chat_id)
 
     def _selected_path(self, index: QModelIndex) -> Path:
         return Path(self._tree_model.filePath(index))
@@ -581,6 +721,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
                 tone="meta",
             )
         self._set_status(f"Ready ({self._mode} mode)")
+        self._save_current_chat_session()
 
     def _handle_mode_changed(self, mode: str) -> None:
         normalized_mode = normalize_mode(mode)
@@ -630,6 +771,8 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._send_button.setDisabled(busy)
         self._chat_input.setDisabled(busy)
         self._mode_selector.setDisabled(busy)
+        self._chat_selector.setDisabled(busy)
+        self._new_chat_button.setDisabled(busy)
         self._tree_view.setDisabled(busy)
         self._save_button.setDisabled(busy)
 
@@ -728,11 +871,15 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._finalise_work_group(label="Работал на протяжении")
         self._append_chat_message("Assistant", result, tone="assistant")
         self._set_status("Ready")
+        self._save_current_chat_session()
+        self._refresh_chat_selector(select_id=self._chat_id)
 
     def _handle_agent_error(self, message: str) -> None:
         self._finalise_work_group(label="Завершился с ошибкой за")
         self._append_chat_message("Error", message, tone="error")
         self._set_status("Agent error")
+        self._save_current_chat_session()
+        self._refresh_chat_selector(select_id=self._chat_id)
         QMessageBox.critical(self, "Agent error", message)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt callback signature
@@ -760,5 +907,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         if self._terminal is not None:
             self._terminal.close()
             self._terminal = None
+
+        self._save_current_chat_session()
+        if self._chat_id:
+            write_last_chat_id(self._workspace, self._chat_id)
 
         event.accept()
