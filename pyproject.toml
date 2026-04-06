@@ -21,7 +21,7 @@ dev = ["pytest>=8.0.0"]
 packages = ["src", "src.utils", "src.system_prompts", "src.ui"]
 
 [tool.setuptools.package-data]
-"src.ui" = ["fonts/*.ttf", "assets/*.png"]
+"src.ui" = ["fonts/*.ttf", "assets/*.png", "*.qml"]
 
 [project.scripts]
 babkacli = "src.main:main"

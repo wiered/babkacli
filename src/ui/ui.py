@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 if __package__ in {None, ""}:
     import sys
@@ -19,10 +19,20 @@ if __package__ in {None, ""}:
     from src.ui.agent_studio_window import AgentStudioWindow
     from src.ui.title_bar import build_app_icon
     from src.ui.ui_utils import ensure_bundled_jetbrains_nerd_font
+    from src.ui.webview_setup import (
+        QtWebViewSetupError,
+        ensure_windows_webview2_runtime,
+        initialize_qt_webview,
+    )
 else:
     from ..ui.agent_studio_window import AgentStudioWindow
     from ..ui.title_bar import build_app_icon
     from ..ui.ui_utils import ensure_bundled_jetbrains_nerd_font
+    from ..ui.webview_setup import (
+        QtWebViewSetupError,
+        ensure_windows_webview2_runtime,
+        initialize_qt_webview,
+    )
 
 DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4.1-mini")
 DEFAULT_MAX_STEPS = 8
@@ -61,6 +71,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _show_startup_error(message: str, argv: list[str] | None) -> int:
+    app = QApplication.instance() or QApplication(sys.argv[:1] if argv is None else [sys.argv[0], *argv])
+    app.setApplicationName("BabkaCode")
+    QMessageBox.critical(None, "Qt WebView startup failed", message)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
 
@@ -70,6 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     workspace = _ensure_workspace(Path(args.workspace))
     model = args.model
     max_steps = max(1, args.max_steps)
+
+    try:
+        initialize_qt_webview()
+        ensure_windows_webview2_runtime()
+    except QtWebViewSetupError as exc:
+        return _show_startup_error(str(exc), argv)
 
     app = QApplication.instance() or QApplication(sys.argv[:1] if argv is None else [sys.argv[0], *argv])
     app.setApplicationName("BabkaCode")

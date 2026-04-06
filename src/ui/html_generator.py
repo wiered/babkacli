@@ -325,6 +325,28 @@ def render_chat_history(chat_events: list[ChatEvent], collapsed_blocks: set[str]
   }}
   .toggle-link:hover {{ color: #606060; text-decoration: none; }}
 </style>
+<script>
+  (function() {{
+    const prefix = "__babka_anchor__:";
+
+    function makePayload(href) {{
+      return prefix + encodeURIComponent(href) + "::" + Date.now().toString();
+    }}
+
+    document.addEventListener("click", function(event) {{
+      const anchor = event.target && event.target.closest ? event.target.closest("a[href]") : null;
+      if (!anchor) {{
+        return;
+      }}
+      const href = anchor.getAttribute("href");
+      if (!href) {{
+        return;
+      }}
+      event.preventDefault();
+      document.title = makePayload(href);
+    }}, true);
+  }})();
+</script>
 </head>
 <body>
 """

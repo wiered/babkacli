@@ -10,7 +10,7 @@ from src.ui import interactive_terminal as interactive_terminal_module
 from src.ui import terminal as terminal_module
 from src.ui import windows_frame as windows_frame_module
 from PySide6.QtCore import QPoint, QSize
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
 from PySide6.QtWidgets import QToolButton
 
 
@@ -24,6 +24,31 @@ class _FakeSignal:
 
     def disconnect(self, slot) -> None:
         self.disconnected.append(slot)
+
+    def emit(self, *args) -> None:
+        for slot in self.connected:
+            try:
+                slot(*args)
+            except TypeError:
+                slot()
+
+
+class _FakeChatWebViewHost(QWidget):
+    instances: list["_FakeChatWebViewHost"] = []
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.anchor_activated = _FakeSignal()
+        self.loadFinished = _FakeSignal()
+        self.html_calls: list[str] = []
+        self.scroll_calls = 0
+        self.__class__.instances.append(self)
+
+    def set_chat_html(self, html: str) -> None:
+        self.html_calls.append(html)
+
+    def scroll_to_bottom(self) -> None:
+        self.scroll_calls += 1
 
 
 class _FakeQProcess:
@@ -389,6 +414,72 @@ def test_agent_window_uses_frameless_custom_title_bar(tmp_path):
         assert not window._title_bar._app_icon.isHidden()
         assert not window._title_bar._controls.isHidden()
         assert not hasattr(window, "_title_bar_secondary")
+    finally:
+        window.close()
+
+
+def test_agent_window_renders_chat_history_through_chat_webview_host(tmp_path, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    _FakeChatWebViewHost.instances = []
+    monkeypatch.setattr(agent_studio_window_module, "ChatWebViewHost", _FakeChatWebViewHost)
+    monkeypatch.setattr(agent_studio_window_module, "render_chat_history", lambda events, collapsed: ["<html>chat</html>"])
+
+    window = AgentStudioWindow(workspace=tmp_path, model="gpt-4.1-mini", max_steps=10)
+    try:
+        host = _FakeChatWebViewHost.instances[-1]
+
+        window._append_chat_message("Assistant", "Rendered", tone="assistant")
+
+        assert host.html_calls[-1] == "<html>chat</html>"
+        assert host.scroll_calls == 0
+
+        host.loadFinished.emit(True)
+
+        assert host.scroll_calls == 1
+    finally:
+        window.close()
+
+
+def test_agent_window_copy_anchor_uses_clipboard(tmp_path, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    _FakeChatWebViewHost.instances = []
+    monkeypatch.setattr(agent_studio_window_module, "ChatWebViewHost", _FakeChatWebViewHost)
+    monkeypatch.setattr(agent_studio_window_module, "get_copy_block", lambda block_id: "copied text" if block_id == "cb_1" else None)
+
+    window = AgentStudioWindow(workspace=tmp_path, model="gpt-4.1-mini", max_steps=10)
+    try:
+        QApplication.clipboard().clear()
+
+        window._handle_chat_anchor_clicked("copy%3Acb_1")
+
+        assert QApplication.clipboard().text() == "copied text"
+    finally:
+        window.close()
+
+
+def test_agent_window_toggle_anchor_re_renders_history(tmp_path, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    _FakeChatWebViewHost.instances = []
+    monkeypatch.setattr(agent_studio_window_module, "ChatWebViewHost", _FakeChatWebViewHost)
+
+    window = AgentStudioWindow(workspace=tmp_path, model="gpt-4.1-mini", max_steps=10)
+    try:
+        renders: list[set[str]] = []
+        monkeypatch.setattr(window, "_render_chat_history", lambda: renders.append(set(window._collapsed_blocks)))
+
+        window._collapsed_blocks = {"block-7"}
+        window._handle_chat_anchor_clicked("toggle%3Ablock-7")
+        assert "block-7" not in window._collapsed_blocks
+
+        window._handle_chat_anchor_clicked("toggle%3Ablock-7")
+        assert "block-7" in window._collapsed_blocks
+        assert len(renders) == 2
     finally:
         window.close()
 

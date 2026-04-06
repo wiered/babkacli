@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import time
+from urllib.parse import unquote
 
 import sys
 from dataclasses import dataclass
@@ -16,10 +17,8 @@ from typing import Any
 
 from azure.ai.inference.models import SystemMessage, UserMessage
 from dotenv import load_dotenv
-from PySide6.QtCore import QDir, QEvent, QModelIndex, QObject, Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QMouseEvent, QShowEvent, QCloseEvent
-from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtCore import QDir, QEvent, QModelIndex, QObject, Qt, QThread, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QFont, QKeySequence, QMouseEvent, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -48,6 +47,7 @@ if __package__ in {None, ""}:
     from src.ui.terminal import TerminalController
     from src.ui.ui_utils import SUPPORTED_MODES, normalize_mode, format_json
     from src.ui.agent_worker import AgentWorker
+    from src.ui.chat_webview import ChatWebViewHost
     from src.ui.python_highlighter import PythonHighlighter
     from src.ui.title_bar import build_app_icon, TitleBar
     from src.ui.native_chrome_win32 import LowLevelNativeChromeMixin
@@ -60,6 +60,7 @@ else:
     from ..ui.terminal import TerminalController
     from ..ui.ui_utils import SUPPORTED_MODES, normalize_mode, format_json
     from ..ui.agent_worker import AgentWorker
+    from ..ui.chat_webview import ChatWebViewHost
     from ..ui.python_highlighter import PythonHighlighter
     from ..ui.title_bar import build_app_icon, TitleBar
     from ..ui.native_chrome_win32 import LowLevelNativeChromeMixin
@@ -70,13 +71,25 @@ else:
 logger = logging.getLogger(__name__)
 
 
-def _webengine_layout_diag_enabled() -> bool:
-    """Diagnostic layout (gap, colors, hit logging). Env BABKA_WEBENGINE_DIAG=0 disables."""
-    v = os.environ.get("BABKA_WEBENGINE_DIAG", "1").strip().lower()
+def _webview_layout_diag_enabled() -> bool:
+    """Diagnostic layout (gap, colors, hit logging). Env BABKA_WEBVIEW_DIAG=0 disables."""
+    raw = os.environ.get("BABKA_WEBVIEW_DIAG", os.environ.get("BABKA_WEBENGINE_DIAG", "1"))
+    v = raw.strip().lower()
     return v in ("1", "true", "yes", "on")
 
 
-class _WebEngineDiagHitLogFilter(QObject):
+def _enum_log_value(value: object) -> object:
+    """Return a stable loggable value for Qt enums across PySide versions."""
+    raw = getattr(value, "value", None)
+    if isinstance(raw, int):
+        return raw
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+class _WebViewDiagHitLogFilter(QObject):
     """Logs childAt / titlebar / synthetic native hit-test for mouse presses in the main window."""
 
     def __init__(self, window: AgentStudioWindow) -> None:
@@ -108,9 +121,9 @@ class _WebEngineDiagHitLogFilter(QObject):
             lp_cw = cw.mapFromGlobal(gp)
             child_cw = cw.childAt(lp_cw)
         logger.info(
-            "webengine_diag hit: button=%s global=%s local_win=%s child=%s (%s) "
+            "webview_diag hit: button=%s global=%s local_win=%s child=%s (%s) "
             "central_child=%s in_titlebar_drag=%s win32_ht=%s watched=%s",
-            int(event.button()),
+            _enum_log_value(event.button()),
             (gp.x(), gp.y()),
             (lp.x(), lp.y()),
             child_name,
@@ -121,18 +134,6 @@ class _WebEngineDiagHitLogFilter(QObject):
             type(watched).__name__,
         )
         return False
-
-
-class _ChatPage(QWebEnginePage):
-    """WebEnginePage that intercepts copy:/toggle: link clicks instead of navigating."""
-
-    link_activated = Signal(str)
-
-    def acceptNavigationRequest(self, url: QUrl, nav_type, is_main_frame: bool) -> bool:
-        if nav_type == QWebEnginePage.NavigationType.NavigationTypeLinkClicked:
-            self.link_activated.emit(url.toString())
-            return False
-        return True
 
 
 def _format_duration(seconds: float) -> str:
@@ -168,7 +169,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._work_group_header: ChatEvent | None = None
         self._native_chrome_applied = False
         self._title_bar: TitleBar | None = None
-        self._webengine_diag = _webengine_layout_diag_enabled()
+        self._webview_diag = _webview_layout_diag_enabled()
         self._diag_hit_filter: QObject | None = None
         self._root_container: QWidget | None = None
         self._title_content_gap: QWidget | None = None
@@ -184,8 +185,8 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self.resize(1520, 920)
         self._configure_window_chrome()
         self._apply_style()
-        if self._webengine_diag:
-            self._diag_hit_filter = _WebEngineDiagHitLogFilter(self)
+        if self._webview_diag:
+            self._diag_hit_filter = _WebViewDiagHitLogFilter(self)
             app_inst = QApplication.instance()
             if app_inst is not None:
                 app_inst.installEventFilter(self._diag_hit_filter)
@@ -326,20 +327,16 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         chat_panel = QWidget(self)
 
-        # WebEngine lives only inside this container; 2 px margins keep the native
-        # Chromium surface away from adjacent Qt widgets (no flush edge with chat header).
+        # The WebView host lives only inside this container; 2 px margins keep the
+        # embedded surface away from adjacent Qt widgets.
         self._chat_web_container = QWidget(chat_panel)
-        self._chat_web_container.setObjectName("chatWebEngineContainer")
+        self._chat_web_container.setObjectName("chatWebViewContainer")
         web_c_layout = QVBoxLayout(self._chat_web_container)
         web_c_layout.setContentsMargins(2, 2, 2, 2)
         web_c_layout.setSpacing(0)
 
-        self._chat_history = QWebEngineView(self._chat_web_container)
-        self._chat_page = _ChatPage(self._chat_history)
-        self._chat_page.setBackgroundColor(QColor("#1a1a1a"))
-        self._chat_history.setPage(self._chat_page)
-        self._chat_history.setStyleSheet("background: #1a1a1a;")
-        self._chat_page.link_activated.connect(self._handle_chat_anchor_clicked)
+        self._chat_history = ChatWebViewHost(self._chat_web_container)
+        self._chat_history.anchor_activated.connect(self._handle_chat_anchor_clicked)
         self._chat_history.loadFinished.connect(self._scroll_chat_to_bottom)
         web_c_layout.addWidget(self._chat_history, 1)
 
@@ -405,7 +402,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         # ── Root container ────────────────────────────────────────────────────
         container = QWidget(self)
-        if self._webengine_diag:
+        if self._webview_diag:
             container.setObjectName("diagRootContainer")
         self._root_container = container
         root = QVBoxLayout(container)
@@ -414,7 +411,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._title_content_gap = QWidget(container)
         self._title_content_gap.setObjectName("titleContentGap")
         self._title_content_gap.setFixedHeight(2)
-        gap_bg = "#888888" if self._webengine_diag else "#1a1a1a"
+        gap_bg = "#888888" if self._webview_diag else "#1a1a1a"
         self._title_content_gap.setStyleSheet(f"background-color: {gap_bg};")
         root.addWidget(self._title_bar, 0)
         root.addWidget(self._title_content_gap, 0)
@@ -447,11 +444,11 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self.setStyleSheet(
             STYLE_SHEET
         )
-        self._apply_webengine_diag_overrides()
+        self._apply_webview_diag_overrides()
 
-    def _apply_webengine_diag_overrides(self) -> None:
-        """Bold diagnostic chrome: red title strip, gray client, blue WebEngine frame."""
-        if not self._webengine_diag:
+    def _apply_webview_diag_overrides(self) -> None:
+        """Bold diagnostic chrome: red title strip, gray client, blue WebView frame."""
+        if not self._webview_diag:
             return
         if self._title_bar is not None:
             self._title_bar.setStyleSheet(
@@ -483,7 +480,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         if self._chat_web_container is not None:
             self._chat_web_container.setStyleSheet(
                 """
-                QWidget#chatWebEngineContainer {
+                QWidget#chatWebViewContainer {
                     border: 3px solid #0066ff;
                     background-color: #505050;
                 }
@@ -504,14 +501,13 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             self._native_chrome_applied = True
             self._apply_native_styles()
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt callback signature
+    def _remove_diag_hit_filter(self) -> None:
         if self._diag_hit_filter is not None:
             app_inst = QApplication.instance()
             if app_inst is not None:
                 app_inst.removeEventFilter(self._diag_hit_filter)
             self._diag_hit_filter.deleteLater()
             self._diag_hit_filter = None
-        super().closeEvent(event)
 
     def nativeEvent(self, eventType, message):  # noqa: N802 - Qt callback signature
         if sys.platform == "win32":
@@ -680,13 +676,11 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         return block_id
 
     def _scroll_chat_to_bottom(self) -> None:
-        self._chat_history.page().runJavaScript(
-            "window.scrollTo(0, document.body.scrollHeight);"
-        )
+        self._chat_history.scroll_to_bottom()
 
     def _render_chat_history(self) -> None:
         html_parts = render_chat_history(self._chat_events, self._collapsed_blocks)
-        self._chat_history.setHtml("".join(html_parts))
+        self._chat_history.set_chat_html("".join(html_parts))
 
     def _append_chat_message(self, role: str, body: str, *, tone: str = "neutral") -> None:
         self._chat_events.append(ChatEvent(kind="message", title=role, body=body, tone=tone))
@@ -737,6 +731,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._render_chat_history()
 
     def _handle_chat_anchor_clicked(self, token: str) -> None:
+        token = unquote(token)
 
         if token.startswith("copy:"):
             block_id = token[len("copy:"):]
@@ -752,6 +747,10 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             else:
                 self._collapsed_blocks.add(block_id)
             self._render_chat_history()
+            return
+
+        if token:
+            QDesktopServices.openUrl(QUrl(token))
 
     def _set_busy(self, busy: bool) -> None:
         self._send_button.setDisabled(busy)
@@ -862,7 +861,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._set_status("Agent error")
         QMessageBox.critical(self, "Agent error", message)
 
-    def closeEvent(self, event) -> None:  # noqa: N802 - Qt callback signature
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt callback signature
         if self._dirty and self._current_file is not None:
             choice = QMessageBox.question(
                 self,
@@ -880,6 +879,8 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
                 event.ignore()
                 return
 
+        self._remove_diag_hit_filter()
+
         if self._worker_thread is not None:
             self._worker_thread.quit()
             self._worker_thread.wait(1500)
@@ -888,4 +889,4 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             self._terminal.close()
             self._terminal = None
 
-        event.accept()
+        super().closeEvent(event)
