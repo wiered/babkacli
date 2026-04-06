@@ -1,0 +1,13 @@
+.pytest_cache/
+pytest-cache-files-*/
+
+babkacli.egg-info/
+
+__pycache__/
+*.py[cod]
+
+.venv/
+
+.env
+.env.*
+!.env.example
