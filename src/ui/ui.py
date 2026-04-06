@@ -25,7 +25,9 @@ else:
     from ..ui.title_bar import build_app_icon
     from ..ui.ui_utils import ensure_bundled_jetbrains_nerd_font
 
-DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4.1-mini")
+from dotenv import load_dotenv
+load_dotenv()
+DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
 DEFAULT_MAX_STEPS = 8
 
 def _repo_root() -> Path:
@@ -51,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
-        help="GitHub Models model name. Defaults to openai/gpt-4.1-mini.",
+        help="GitHub Models model name. Defaults to openai/gpt-4o.",
     )
     parser.add_argument(
         "--max-steps",

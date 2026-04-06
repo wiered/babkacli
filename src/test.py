@@ -4,10 +4,13 @@ from azure.ai.inference.models import SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
 
 endpoint = "https://models.github.ai/inference"
-model = "openai/gpt-4.1"
 
 from dotenv import load_dotenv
 load_dotenv()
+
+model = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+
+
 
 token = os.environ["GITHUB_TOKEN"]
 

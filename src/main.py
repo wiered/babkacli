@@ -28,8 +28,11 @@ else:
     from .utils.commands import CommandExecutionError, parse_and_dispatch_agent_response
     from .utils.json_parser import AgentResponseParseError
 
+from dotenv import load_dotenv
+load_dotenv()
+DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+
 ENDPOINT = "https://models.github.ai/inference"
-DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4.1-mini")
 DEFAULT_MAX_STEPS = 8
 
 

@@ -1,3 +1,4 @@
+import os
 from types import SimpleNamespace
 
 from azure.ai.inference.models import SystemMessage
@@ -366,7 +367,11 @@ def test_agent_window_uses_frameless_custom_title_bar(tmp_path):
     app = QApplication.instance() or QApplication([])
     assert app is not None
 
-    window = AgentStudioWindow(workspace=tmp_path, model="gpt-4.1-mini", max_steps=10)
+    from dotenv import load_dotenv
+    load_dotenv()
+    DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+
+    window = AgentStudioWindow(workspace=tmp_path, model=DEFAULT_MODEL, max_steps=10)
     try:
         flags = window.windowFlags()
         assert bool(flags & agent_studio_window_module.Qt.WindowType.FramelessWindowHint)
@@ -417,7 +422,11 @@ def test_agent_window_chat_view_is_chat_webview(tmp_path):
 
     from src.ui.chat_webview import ChatWebView
 
-    window = AgentStudioWindow(workspace=tmp_path, model="gpt-4.1-mini", max_steps=10)
+    from dotenv import load_dotenv
+    load_dotenv()
+    DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+
+    window = AgentStudioWindow(workspace=tmp_path, model=DEFAULT_MODEL, max_steps=10)
     try:
         assert isinstance(window._chat_view, ChatWebView)
     finally:

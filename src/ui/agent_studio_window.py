@@ -773,7 +773,6 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._mode_selector.setDisabled(busy)
         self._chat_selector.setDisabled(busy)
         self._new_chat_button.setDisabled(busy)
-        self._tree_view.setDisabled(busy)
         self._save_button.setDisabled(busy)
 
     def _send_chat(self) -> None:
