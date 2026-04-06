@@ -1,6 +1,7 @@
 from sorts.quicksort import quicksort
 from sorts.bubblesort import bubblesort
 from sorts.stalinsort import stalinsort
+from sorts.insertionsort import insertionsort
 from utils.utils import generate_random_array, start_timer
 
 # Создаем массив из 10000 случайных чисел от 0 до 999
@@ -18,6 +19,10 @@ print(f"Время работы bubblesort: {bs_time:.6f} секунд")
 ss_time = start_timer(stalinsort, arr)
 print(f"Время работы stalinsort: {ss_time:.6f} секунд")
 
+# Используем start_timer для измерения времени работы insertionsort
+is_time = start_timer(insertionsort, arr)
+print(f"Время работы insertionsort: {is_time:.6f} секунд")
+
 # Вывод разницы во времени
 if qs_time < bs_time:
     print(f"Quicksort быстрее bubblesort на {bs_time - qs_time:.6f} секунд")
@@ -33,3 +38,18 @@ if bs_time < ss_time:
     print(f"Bubblesort быстрее stalinsort на {ss_time - bs_time:.6f} секунд")
 else:
     print(f"Stalinsort быстрее bubblesort на {bs_time - ss_time:.6f} секунд")
+
+if qs_time < is_time:
+    print(f"Quicksort быстрее insertionsort на {is_time - qs_time:.6f} секунд")
+else:
+    print(f"Insertionsort быстрее quicksort на {qs_time - is_time:.6f} секунд")
+
+if bs_time < is_time:
+    print(f"Bubblesort быстрее insertionsort на {is_time - bs_time:.6f} секунд")
+else:
+    print(f"Insertionsort быстрее bubblesort на {bs_time - is_time:.6f} секунд")
+
+if ss_time < is_time:
+    print(f"Stalinsort быстрее insertionsort на {is_time - ss_time:.6f} секунд")
+else:
+    print(f"Insertionsort быстрее stalinsort на {ss_time - is_time:.6f} секунд")

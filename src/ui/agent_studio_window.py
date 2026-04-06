@@ -128,10 +128,14 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
     def _build_ui(self) -> None:
         model_short = self._model.split("/")[-1] if "/" in self._model else self._model
+        # Match AI ASSISTANT header row height across all three columns.
+        panel_header_h = 44
+
         # ── File Explorer panel ───────────────────────────────────────────────
         explorer_label = QLabel("  EXPLORER")
         explorer_label.setObjectName("panelHeader")
-        explorer_label.setFixedHeight(32)
+        explorer_label.setFixedHeight(panel_header_h)
+        explorer_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         self._tree_model = QFileSystemModel(self)
         self._tree_model.setRootPath(str(self._workspace))
@@ -179,10 +183,11 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         file_tab_bar = QFrame(self)
         file_tab_bar.setObjectName("fileTabBar")
-        file_tab_bar.setFixedHeight(36)
+        file_tab_bar.setFixedHeight(panel_header_h)
         tab_layout = QHBoxLayout(file_tab_bar)
         tab_layout.setContentsMargins(12, 0, 8, 0)
         tab_layout.setSpacing(8)
+        tab_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         tab_layout.addWidget(self._file_label, 1)
         tab_layout.addWidget(self._toggle_terminal_button, 0)
         tab_layout.addWidget(self._save_button, 0)
@@ -241,7 +246,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         chat_hdr = QFrame(self)
         chat_hdr.setObjectName("chatHeaderFrame")
-        chat_hdr.setFixedHeight(44)
+        chat_hdr.setFixedHeight(panel_header_h)
         ch_layout = QHBoxLayout(chat_hdr)
         ch_layout.setContentsMargins(12, 0, 12, 0)
         ch_layout.setSpacing(8)

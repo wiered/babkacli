@@ -354,18 +354,19 @@ def render_chat_history(chat_events: list[ChatEvent], collapsed_blocks: set[str]
         if event.kind == "message":
 
             if event.tone == "user":
-                body_html = html.escape(event.body).replace("\n", "<br>")
+                # Normalize newlines, strip ends; pre-wrap would also preserve
+                # indentation from the HTML template around the injected body.
+                user_text = event.body.replace("\r\n", "\n").replace("\r", "\n").strip()
+                body_html = html.escape(user_text).replace("\n", "<br>")
                 html_parts.append(f"""
-<div style="margin: 10px 0 16px 0; padding-right: 16px;">
-  <table align="right" cellpadding="0" cellspacing="0"
+<div style="margin: 10px 0 16px 0; display: flex; flex-direction: column; align-items: flex-end;">
+  <table cellpadding="0" cellspacing="0"
          style="max-width: 72%; border-collapse: separate; border-spacing: 0;">
     <tr>
       <td style="background-color: #252525; border: 1px solid #303030;
           border-radius: 14px 14px 4px 14px;
           padding: 10px 16px; color: #e2e2e2; font-size: 13.5px;
-          line-height: 1.6; white-space: pre-wrap; word-wrap: break-word;">
-        {body_html}
-      </td>
+          line-height: 1.6; white-space: normal; word-wrap: break-word; overflow-wrap: break-word;">{body_html}</td>
     </tr>
   </table>
 </div>
