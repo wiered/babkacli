@@ -148,8 +148,8 @@ def run_repl(*, workspace: Path, model: str, max_steps: int) -> int:
             return 0
         if user_text.lower() in {"/md"}:
             text = """
-Напиши все доступные виды форматирования markdown доступные для result.
-Для блока кода напиши код hello world с использованием def main():.
+Напиши полноценно форматированный markdown документ с демонстрацией
+всех форматирований доступных в result для теста отображения markdown в клиенте
             """
             messages.append(UserMessage(text))
             result = _execute_agent_turn(
