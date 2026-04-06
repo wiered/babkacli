@@ -16,7 +16,7 @@ from typing import Any
 
 from azure.ai.inference.models import SystemMessage, UserMessage
 from dotenv import load_dotenv
-from PySide6.QtCore import QDir, QEvent, QModelIndex, QObject, Qt, QThread, Signal
+from PySide6.QtCore import QDir, QModelIndex, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QFont, QKeySequence, QMouseEvent, QShowEvent, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -70,60 +70,6 @@ else:
 logger = logging.getLogger(__name__)
 
 
-def _webengine_layout_diag_enabled() -> bool:
-    """Diagnostic layout (gap, colors, hit logging). Env BABKA_WEBENGINE_DIAG=0 disables."""
-    v = os.environ.get("BABKA_WEBENGINE_DIAG", "1").strip().lower()
-    return v in ("1", "true", "yes", "on")
-
-
-class _WebEngineDiagHitLogFilter(QObject):
-    """Logs childAt / titlebar / synthetic native hit-test for mouse presses in the main window."""
-
-    def __init__(self, window: AgentStudioWindow) -> None:
-        super().__init__(window)
-        self._window = window
-
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802
-        if event.type() != QEvent.Type.MouseButtonPress:
-            return False
-        if not isinstance(event, QMouseEvent):
-            return False
-        w = self._window
-        if not w.isVisible():
-            return False
-        gp = event.globalPosition().toPoint()
-        lp = w.mapFromGlobal(gp)
-        if not w.rect().contains(lp):
-            return False
-        child = w.childAt(lp)
-        child_name = child.objectName() if child is not None else ""
-        child_cls = type(child).__name__ if child is not None else "None"
-        in_tb = w._point_in_titlebar_drag_region(lp.x(), lp.y())
-        ht = None
-        if sys.platform == "win32" and hasattr(w, "_hit_test_native"):
-            ht = w._hit_test_native(lp.x(), lp.y())
-        cw = w.centralWidget()
-        child_cw = None
-        if cw is not None:
-            lp_cw = cw.mapFromGlobal(gp)
-            child_cw = cw.childAt(lp_cw)
-        logger.info(
-            "webengine_diag hit: button=%s global=%s local_win=%s child=%s (%s) "
-            "central_child=%s in_titlebar_drag=%s win32_ht=%s watched=%s",
-            event.button().value,
-            (gp.x(), gp.y()),
-            (lp.x(), lp.y()),
-            child_name,
-            child_cls,
-            type(child_cw).__name__ if child_cw is not None else None,
-            in_tb,
-            ht,
-            type(watched).__name__,
-        )
-        return False
-
-
-
 def _format_duration(seconds: float) -> str:
     total = int(seconds)
     if total < 60:
@@ -157,9 +103,6 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._work_group_header: ChatEvent | None = None
         self._native_chrome_applied = False
         self._title_bar: TitleBar | None = None
-        self._webengine_diag = _webengine_layout_diag_enabled()
-        self._diag_hit_filter: QObject | None = None
-        self._root_container: QWidget | None = None
         self._title_content_gap: QWidget | None = None
         self._chat_web_container: QWidget | None = None
 
@@ -173,11 +116,6 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self.resize(1520, 920)
         self._configure_window_chrome()
         self._apply_style()
-        if self._webengine_diag:
-            self._diag_hit_filter = _WebEngineDiagHitLogFilter(self)
-            app_inst = QApplication.instance()
-            if app_inst is not None:
-                app_inst.installEventFilter(self._diag_hit_filter)
         self._open_initial_file()
 
     def _configure_window_chrome(self) -> None:
@@ -317,7 +255,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         # 2 px margins keep the browser surface away from adjacent Qt widgets.
         self._chat_web_container = QWidget(chat_panel)
-        self._chat_web_container.setObjectName("chatWebEngineContainer")
+        self._chat_web_container.setObjectName("chatWebContainer")
         web_c_layout = QVBoxLayout(self._chat_web_container)
         web_c_layout.setContentsMargins(2, 2, 2, 2)
         web_c_layout.setSpacing(0)
@@ -389,17 +327,13 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         # ── Root container ────────────────────────────────────────────────────
         container = QWidget(self)
-        if self._webengine_diag:
-            container.setObjectName("diagRootContainer")
-        self._root_container = container
         root = QVBoxLayout(container)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
         self._title_content_gap = QWidget(container)
         self._title_content_gap.setObjectName("titleContentGap")
         self._title_content_gap.setFixedHeight(2)
-        gap_bg = "#888888" if self._webengine_diag else "#1a1a1a"
-        self._title_content_gap.setStyleSheet(f"background-color: {gap_bg};")
+        self._title_content_gap.setStyleSheet("background-color: #1a1a1a;")
         root.addWidget(self._title_bar, 0)
         root.addWidget(self._title_content_gap, 0)
         root.addWidget(self._splitter, 1)
@@ -431,48 +365,6 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self.setStyleSheet(
             STYLE_SHEET
         )
-        self._apply_webengine_diag_overrides()
-
-    def _apply_webengine_diag_overrides(self) -> None:
-        """Bold diagnostic chrome: red title strip, gray client, blue WebEngine frame."""
-        if not self._webengine_diag:
-            return
-        if self._title_bar is not None:
-            self._title_bar.setStyleSheet(
-                """
-                QWidget#titleBar {
-                    background: #cc0000;
-                    border-bottom: 2px solid #990000;
-                }
-                QWidget#titleBarControls { background: transparent; }
-                QLabel#titleIconLabel, QLabel#titleLabel { color: #ffffff; background: transparent; }
-                QLabel#workspacePathLabel { color: #eeeeee; background: transparent; }
-                QLabel#modelBadge {
-                    color: #ffffff;
-                    background: rgba(0,0,0,0.25);
-                    border: 1px solid #ffffff;
-                }
-                QToolButton#titleBtn, QToolButton#titleBtnClose {
-                    background: transparent;
-                    border: none;
-                }
-                QToolButton#titleBtn:hover { background: rgba(255,255,255,0.2); }
-                QToolButton#titleBtnClose:hover { background: rgba(0,0,0,0.35); }
-                """
-            )
-        if self._root_container is not None:
-            self._root_container.setStyleSheet(
-                "QWidget#diagRootContainer { background-color: #808080; }"
-            )
-        if self._chat_web_container is not None:
-            self._chat_web_container.setStyleSheet(
-                """
-                QWidget#chatWebEngineContainer {
-                    border: 3px solid #0066ff;
-                    background-color: #505050;
-                }
-                """
-            )
 
     def _set_status(self, text: str) -> None:
         self._status.setText(f"  {text}")
@@ -489,12 +381,6 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             self._apply_native_styles()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt callback signature
-        if self._diag_hit_filter is not None:
-            app_inst = QApplication.instance()
-            if app_inst is not None:
-                app_inst.removeEventFilter(self._diag_hit_filter)
-            self._diag_hit_filter.deleteLater()
-            self._diag_hit_filter = None
         super().closeEvent(event)
 
     def nativeEvent(self, eventType, message):  # noqa: N802 - Qt callback signature

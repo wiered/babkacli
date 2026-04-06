@@ -69,7 +69,12 @@ class ChatWebView(QWidget):
             def on_link_click(url: str) -> None:
                 self.link_activated.emit(url)
 
-            self._webview = QtWebView2Widget(parent=self, js_apis=self._bridge)
+            self.setStyleSheet(f"background-color: {_BG_COLOR};")
+            self._webview = QtWebView2Widget(
+                parent=self,
+                js_apis=self._bridge,
+                background_color=_BG_COLOR,
+            )
             self._webview.bridge.domContentLoaded.connect(self._on_dom_loaded)
             layout.addWidget(self._webview, 1)
         else:

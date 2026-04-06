@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 if __package__ in {None, ""}:
@@ -72,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     max_steps = max(1, args.max_steps)
 
     app = QApplication.instance() or QApplication(sys.argv[:1] if argv is None else [sys.argv[0], *argv])
+    # Dark UI; avoids Qt trying (and failing) to apply a light DWM border on some child HWNDs (e.g. WebView2).
+    QGuiApplication.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     app.setApplicationName("BabkaCode")
     app.setOrganizationName("babkacli")
     app.setWindowIcon(build_app_icon())
