@@ -393,6 +393,37 @@ def test_agent_window_uses_frameless_custom_title_bar(tmp_path):
         window.close()
 
 
+def test_chat_webview_exposes_unified_api(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    from src.ui.chat_webview import ChatWebView
+
+    view = ChatWebView()
+    try:
+        assert view.backend_name() in ("webview2", "webengine")
+        assert hasattr(view, "link_activated")
+        assert hasattr(view, "content_loaded")
+
+        view.set_html("<html><body>hello</body></html>")
+        view.run_js("1+1")
+    finally:
+        view.close()
+
+
+def test_agent_window_chat_view_is_chat_webview(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    from src.ui.chat_webview import ChatWebView
+
+    window = AgentStudioWindow(workspace=tmp_path, model="gpt-4.1-mini", max_steps=10)
+    try:
+        assert isinstance(window._chat_view, ChatWebView)
+    finally:
+        window.close()
+
+
 def test_interactive_terminal_emulator_handles_cursor_rewrites():
     emulator = interactive_terminal_module.TerminalEmulator(rows=3, columns=8)
 

@@ -16,10 +16,8 @@ from typing import Any
 
 from azure.ai.inference.models import SystemMessage, UserMessage
 from dotenv import load_dotenv
-from PySide6.QtCore import QDir, QEvent, QModelIndex, QObject, Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QKeySequence, QMouseEvent, QShowEvent, QCloseEvent
-from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtCore import QDir, QEvent, QModelIndex, QObject, Qt, QThread, Signal
+from PySide6.QtGui import QAction, QFont, QKeySequence, QMouseEvent, QShowEvent, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -54,6 +52,7 @@ if __package__ in {None, ""}:
     from src.ui.ui_utils import build_messages, build_nerd_font, ChatEvent
     from src.ui.style import STYLE_SHEET
     from src.ui.html_generator import render_chat_history, get_copy_block
+    from src.ui.chat_webview import ChatWebView
 
 else:
     from ..ui.interactive_terminal import InteractiveTerminal
@@ -66,6 +65,7 @@ else:
     from ..ui.ui_utils import build_messages, build_nerd_font, ChatEvent
     from ..ui.style import STYLE_SHEET
     from ..ui.html_generator import render_chat_history, get_copy_block
+    from ..ui.chat_webview import ChatWebView
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class _WebEngineDiagHitLogFilter(QObject):
         logger.info(
             "webengine_diag hit: button=%s global=%s local_win=%s child=%s (%s) "
             "central_child=%s in_titlebar_drag=%s win32_ht=%s watched=%s",
-            int(event.button()),
+            event.button().value,
             (gp.x(), gp.y()),
             (lp.x(), lp.y()),
             child_name,
@@ -122,17 +122,6 @@ class _WebEngineDiagHitLogFilter(QObject):
         )
         return False
 
-
-class _ChatPage(QWebEnginePage):
-    """WebEnginePage that intercepts copy:/toggle: link clicks instead of navigating."""
-
-    link_activated = Signal(str)
-
-    def acceptNavigationRequest(self, url: QUrl, nav_type, is_main_frame: bool) -> bool:
-        if nav_type == QWebEnginePage.NavigationType.NavigationTypeLinkClicked:
-            self.link_activated.emit(url.toString())
-            return False
-        return True
 
 
 def _format_duration(seconds: float) -> str:
@@ -326,22 +315,17 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         chat_panel = QWidget(self)
 
-        # WebEngine lives only inside this container; 2 px margins keep the native
-        # Chromium surface away from adjacent Qt widgets (no flush edge with chat header).
+        # 2 px margins keep the browser surface away from adjacent Qt widgets.
         self._chat_web_container = QWidget(chat_panel)
         self._chat_web_container.setObjectName("chatWebEngineContainer")
         web_c_layout = QVBoxLayout(self._chat_web_container)
         web_c_layout.setContentsMargins(2, 2, 2, 2)
         web_c_layout.setSpacing(0)
 
-        self._chat_history = QWebEngineView(self._chat_web_container)
-        self._chat_page = _ChatPage(self._chat_history)
-        self._chat_page.setBackgroundColor(QColor("#1a1a1a"))
-        self._chat_history.setPage(self._chat_page)
-        self._chat_history.setStyleSheet("background: #1a1a1a;")
-        self._chat_page.link_activated.connect(self._handle_chat_anchor_clicked)
-        self._chat_history.loadFinished.connect(self._scroll_chat_to_bottom)
-        web_c_layout.addWidget(self._chat_history, 1)
+        self._chat_view = ChatWebView(self._chat_web_container)
+        self._chat_view.link_activated.connect(self._handle_chat_anchor_clicked)
+        self._chat_view.content_loaded.connect(self._scroll_chat_to_bottom)
+        web_c_layout.addWidget(self._chat_view, 1)
 
         self._chat_input = QPlainTextEdit(self)
         self._update_chat_placeholder()
@@ -680,13 +664,11 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         return block_id
 
     def _scroll_chat_to_bottom(self) -> None:
-        self._chat_history.page().runJavaScript(
-            "window.scrollTo(0, document.body.scrollHeight);"
-        )
+        self._chat_view.run_js("window.scrollTo(0, document.body.scrollHeight);")
 
     def _render_chat_history(self) -> None:
         html_parts = render_chat_history(self._chat_events, self._collapsed_blocks)
-        self._chat_history.setHtml("".join(html_parts))
+        self._chat_view.set_html("".join(html_parts))
 
     def _append_chat_message(self, role: str, body: str, *, tone: str = "neutral") -> None:
         self._chat_events.append(ChatEvent(kind="message", title=role, body=body, tone=tone))

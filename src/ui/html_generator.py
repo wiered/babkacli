@@ -22,7 +22,7 @@ def get_copy_block(block_id: str) -> str | None:
 # ── Markdown → HTML ────────────────────────────────────────────────────────────
 
 def _md_to_html(text: str, *, mono: str, copy_store: dict[str, str]) -> str:
-    """Convert a subset of Markdown to HTML for display in QTextBrowser."""
+    """Convert a subset of Markdown to HTML for the chat web view."""
 
     lines = text.split("\n")
     out: list[str] = []
