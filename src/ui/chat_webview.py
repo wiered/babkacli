@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 from PySide6.QtCore import Signal
@@ -12,7 +13,11 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 logger = logging.getLogger(__name__)
 
 _USE_WEBVIEW2 = False
-if sys.platform == "win32":
+if sys.platform == "win32" and os.environ.get("BABKACLI_DISABLE_WEBVIEW2", "").lower() not in (
+    "1",
+    "true",
+    "yes",
+):
     try:
         from qtwebview2 import QtWebView2Widget, DictJsBridge
 
