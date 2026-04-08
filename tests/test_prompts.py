@@ -15,6 +15,11 @@ def test_build_system_prompt_for_ask_omits_writefile():
     assert COMMAND_PROMPTS["createFolders"] not in prompt
     assert COMMAND_PROMPTS["createFiles"] not in prompt
     assert COMMAND_PROMPTS["codeact"] not in prompt
+    assert "Start by inspecting the project structure with `ls`" in prompt
+    assert "using `codeact` or `ls`" not in prompt
+    assert "Ask mode is read-only" in prompt
+    assert "Do not use `writefile`" in prompt
+    assert "`runpy`" in prompt and "`codeact`" in prompt
 
 
 def test_build_system_prompt_for_agent_includes_writefile():
@@ -25,6 +30,8 @@ def test_build_system_prompt_for_agent_includes_writefile():
     assert COMMAND_PROMPTS["writefile"] in prompt
     assert COMMAND_PROMPTS["runpy"] in prompt
     assert COMMAND_PROMPTS["codeact"] in prompt
+    assert "Start by inspecting the project structure using `codeact` or `ls`" in prompt
+    assert "Agent mode: you may use every command listed below" in prompt
 
 
 def test_build_system_prompt_for_mode_normalizes_input():

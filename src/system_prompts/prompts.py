@@ -87,7 +87,8 @@ DONE_PROMPT = dedent(
     - Use only for the final user response.
     - Input JSON:
       {"command":"done","result":"final answer to the user"}
-    - In the `result` field, write the final response in natural language using markdown (headings, lists, emphasis, links, code).
+    - Put the user-facing text inside the JSON string `result` only. Use markdown there (headings, lists, links, code) when it helps.
+    - `result` must obey JSON string rules: backslash-escape embedded double quotes, backslashes, and line breaks so the outer object stays valid JSON.
 
     """
 ).strip()
@@ -105,10 +106,15 @@ CODEACT_PROMPT = dedent(
     """
     codeact:
     - Python in workspace; `CodeAct` and `ca` (default instance) in scope (do not import). Stdout/stderr returned; use `print` when useful.
-    - Input: {"command":"codeact","code":"..."} — non-empty source; multiline via \\n in JSON.
-    - ca.files: ls(path, ignore=None); read(path); write(path, content); create(path, content="", is_directory=False); delete(path)
+    - Input (pick one): `{"command":"codeact","code_lines":["line1","line2"]}` — preferred for multiline; each array element is one source line (no \\n-in-string escaping).
+    - Or `{"command":"codeact","code":"single line or use \\n for newlines"}` for short snippets only.
+    - Required: only `ca.files.*` and `ca.search.*` — `CodeAct` has `.files` and `.search` only; never `ca.ls`, `ca.read`, or other methods on `ca` itself.
+    - Files — use `ca.files.ls`, `ca.files.read`, `ca.files.write`, `ca.files.create`, `ca.files.delete`:
+      ls(path, ignore=None); read(path); write(path, content); create(path, content="", is_directory=False); delete(path).
       Returns dicts: read→["content"]; ls→["entries"] as [{name,path,type}]; write/create/delete→status fields.
-    - ca.search: search(pattern, path=".", max_matches=500, max_file_bytes=...); findfiles(pattern, path="."); readfolder(path=".", max_depth=8, max_entries=400)
+      Examples: `ca.files.ls(".")`, `ca.files.read("README.md")`.
+    - Search — use `ca.search.search`, `ca.search.findfiles`, `ca.search.readfolder`:
+      search(pattern, path=".", max_matches=500, max_file_bytes=...); findfiles(pattern, path="."); readfolder(path=".", max_depth=8, max_entries=400).
     - CodeActFilesError | CodeActSearchError on invalid/unsafe paths.
     """
 ).strip()
@@ -126,18 +132,37 @@ COMMAND_PROMPTS = {
 }
 
 
+MODE_COMMAND_POLICY = {
+    "ask": (
+        "Ask mode is read-only: use only the commands listed below. "
+        "Do not use `writefile`, `createFolders`, `createFiles`, `runpy`, or `codeact`—they are not available and will fail."
+    ),
+    "agent": "Agent mode: you may use every command listed below.",
+}
+
+
+OPENING_INSTRUCTION = {
+    "ask": (
+        "Start by inspecting the project structure with `ls` (path is optional); use `readfiles` when you need file contents."
+    ),
+    "agent": (
+        "Start by inspecting the project structure using `codeact` or `ls`."
+    ),
+}
+
+
 SYSTEM_PROMPT_TEMPLATE = dedent(
     """
     You are an AI agent with system access in {mode} mode.
     Respond strictly in JSON format to trigger the necessary scripts.
 
     Rules:
-    - Always return only a single JSON object—no markdown, explanations, or extra text.
+    - Always return only a single JSON object—no markdown code fences around it, no preamble, no trailing commentary.
     - Use the `command` field to select your next action.
     - If you need to execute a system command, choose only from the list of available commands below.
     - If the task is complete, use the `done` command and provide the result to the user in `result`.
     - Do not invent commands outside of the list.
-    - If `writefile` is not available in the current mode, do not use it.
+    - {mode_command_policy}
     - Before executing any command, internally decide the next step based on current knowledge.
     - Do not execute commands blindly; prefer minimal necessary actions.
     - Use internal reasoning to decide next steps, but never include it in the output.
@@ -149,7 +174,7 @@ SYSTEM_PROMPT_TEMPLATE = dedent(
     - Maintain an internal plan of actions and update it after each step.
     - Avoid re-reading files unless necessary.
 
-    Start by inspecting the project structure using codeact.
+    {opening_instruction}
 
     You have the following commands:
 
@@ -179,6 +204,8 @@ def build_system_prompt(mode: str) -> str:
 
     return SYSTEM_PROMPT_TEMPLATE.format(
         mode=mode,
+        mode_command_policy=MODE_COMMAND_POLICY[mode],
+        opening_instruction=OPENING_INSTRUCTION[mode],
         commands="\n\n".join(commands),
     )
 
