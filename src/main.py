@@ -22,11 +22,11 @@ if __package__ in {None, ""}:
 
     from src.system_prompts.prompts import build_system_prompt_for_mode
     from src.utils.commands import CommandExecutionError, parse_and_dispatch_agent_response
-    from src.utils.json_parser import AgentResponseParseError
+    from src.toolcall.json_parser import AgentResponseParseError
 else:
     from .system_prompts.prompts import build_system_prompt_for_mode
     from .utils.commands import CommandExecutionError, parse_and_dispatch_agent_response
-    from .utils.json_parser import AgentResponseParseError
+    from .toolcall.json_parser import AgentResponseParseError
 
 from dotenv import load_dotenv
 load_dotenv()

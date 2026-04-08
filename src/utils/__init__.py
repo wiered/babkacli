@@ -14,7 +14,7 @@ from .commands import (
     readfiles,
     writefile,
 )
-from .json_parser import (
+from ..toolcall.json_parser import (
     AgentResponseParseError,
     ParsedAgentCommand,
     parse_agent_response,

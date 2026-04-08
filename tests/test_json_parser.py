@@ -1,6 +1,6 @@
 import pytest
 
-from src.utils.json_parser import (
+from src.toolcall.json_parser import (
     AgentResponseParseError,
     ParsedAgentCommand,
     parse_agent_response,

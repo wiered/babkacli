@@ -40,10 +40,10 @@ from PySide6.QtWidgets import (
 
 if __package__ in {None, ""}:
     from ..system_prompts.prompts import build_system_prompt_for_mode
-    from ..utils.json_parser import AgentResponseParseError, parse_agent_response
+    from ..toolcall.json_parser import AgentResponseParseError, parse_agent_response
 else:
     from ..system_prompts.prompts import build_system_prompt_for_mode
-    from ..utils.json_parser import AgentResponseParseError, parse_agent_response
+    from ..toolcall.json_parser import AgentResponseParseError, parse_agent_response
     from ..ui.ui_utils import (
         normalize_mode,
         build_client,

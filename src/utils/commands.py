@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from .json_parser import ParsedAgentCommand
+from ..toolcall.json_parser import ParsedAgentCommand
 
 
 class CommandExecutionError(RuntimeError):
@@ -280,7 +280,7 @@ def dispatch_command(command: ParsedAgentCommand) -> CommandOutcome:
 def parse_and_dispatch_agent_response(raw_response: str) -> CommandOutcome:
     """Parse a raw agent response and execute the referenced command."""
 
-    from .json_parser import parse_agent_response
+    from ..toolcall.json_parser import parse_agent_response
 
     parsed = parse_agent_response(raw_response, allowed_commands=set(AVAILABLE_COMMANDS))
     return dispatch_command(parsed)

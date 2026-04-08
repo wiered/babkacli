@@ -17,7 +17,7 @@ from src.utils.commands import (
     runpy,
     writefile,
 )
-from src.utils.json_parser import ParsedAgentCommand
+from src.toolcall.json_parser import ParsedAgentCommand
 
 
 @pytest.fixture()
