@@ -14,6 +14,7 @@ def test_build_system_prompt_for_ask_omits_writefile():
     assert COMMAND_PROMPTS["writefile"] not in prompt
     assert COMMAND_PROMPTS["createFolders"] not in prompt
     assert COMMAND_PROMPTS["createFiles"] not in prompt
+    assert COMMAND_PROMPTS["codeact"] not in prompt
 
 
 def test_build_system_prompt_for_agent_includes_writefile():
@@ -23,6 +24,7 @@ def test_build_system_prompt_for_agent_includes_writefile():
     assert COMMAND_PROMPTS["createFiles"] in prompt
     assert COMMAND_PROMPTS["writefile"] in prompt
     assert COMMAND_PROMPTS["runpy"] in prompt
+    assert COMMAND_PROMPTS["codeact"] in prompt
 
 
 def test_build_system_prompt_for_mode_normalizes_input():

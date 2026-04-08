@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -5,6 +6,7 @@ import pytest
 from src.utils.commands import (
     CommandExecutionError,
     CommandOutcome,
+    codeact,
     createFiles,
     createFolders,
     dispatch_command,
@@ -139,6 +141,53 @@ def test_runpy_rejects_non_python_files(workspace):
 
     with pytest.raises(CommandExecutionError, match="Python file"):
         runpy("main.txt")
+
+
+def test_codeact_rejects_blank_code(workspace):
+    with pytest.raises(CommandExecutionError, match="non-empty string"):
+        codeact("")
+    with pytest.raises(CommandExecutionError, match="non-empty string"):
+        codeact("  \n  ")
+
+
+def test_codeact_runs_python_with_codeact_in_project_root(monkeypatch):
+    project_root = Path(__file__).resolve().parents[1]
+    scratch = project_root / "test_project" / "_codeact_cmd_test.txt"
+    monkeypatch.chdir(project_root)
+    try:
+        scratch.unlink(missing_ok=True)
+        snippet = (
+            "ca = CodeAct()\n"
+            'ca.files.write("test_project/_codeact_cmd_test.txt", "probe")\n'
+        )
+        result = codeact(snippet)
+        assert result["returncode"] == 0, result["stderr"]
+        assert scratch.read_text(encoding="utf-8") == "probe"
+    finally:
+        scratch.unlink(missing_ok=True)
+
+
+def test_parse_and_dispatch_executes_codeact(monkeypatch):
+    project_root = Path(__file__).resolve().parents[1]
+    scratch = project_root / "test_project" / "_codeact_dispatch_test.txt"
+    monkeypatch.chdir(project_root)
+    try:
+        scratch.unlink(missing_ok=True)
+        raw = json.dumps(
+            {
+                "command": "codeact",
+                "code": (
+                    'ca = CodeAct()\n'
+                    'ca.files.write("test_project/_codeact_dispatch_test.txt", "x")'
+                ),
+            }
+        )
+        outcome = parse_and_dispatch_agent_response(raw)
+        assert outcome.command == "codeact"
+        assert outcome.data["returncode"] == 0
+        assert scratch.read_text(encoding="utf-8") == "x"
+    finally:
+        scratch.unlink(missing_ok=True)
 
 
 def test_done_rejects_blank_result():

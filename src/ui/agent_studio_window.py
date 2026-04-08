@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QInputDialog,
     QPushButton,
     QSplitter,
     QStatusBar,
@@ -56,8 +57,11 @@ if __package__ in {None, ""}:
     from src.ui.chat_storage import (
         chat_file_path,
         fresh_session_state,
+        list_archived_chats,
         list_saved_chats,
         load_chat_session,
+        move_chat_from_archive,
+        move_chat_to_archive,
         read_last_chat_id,
         save_chat_session,
         write_last_chat_id,
@@ -78,8 +82,11 @@ else:
     from ..ui.chat_storage import (
         chat_file_path,
         fresh_session_state,
+        list_archived_chats,
         list_saved_chats,
         load_chat_session,
+        move_chat_from_archive,
+        move_chat_to_archive,
         read_last_chat_id,
         save_chat_session,
         write_last_chat_id,
@@ -125,6 +132,10 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._chat_web_container: QWidget | None = None
         self._chat_id: str = ""
         self._suppress_chat_selector = False
+        self._chat_stored_in_archive = False
+        self._chat_usage_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self._turn_prompt_tokens = 0
+        self._turn_completion_tokens = 0
 
         self.setWindowTitle("BabkaCode")
         self.setWindowIcon(build_app_icon())
@@ -279,6 +290,24 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._new_chat_button.setFixedHeight(26)
         self._new_chat_button.clicked.connect(self._new_chat_clicked)
 
+        self._archive_chat_button = QPushButton("В архив")
+        self._archive_chat_button.setObjectName("inlineButton")
+        self._archive_chat_button.setFixedHeight(26)
+        self._archive_chat_button.setToolTip("Убрать текущий чат в архив (файл в .babka/chats/archive/)")
+        self._archive_chat_button.clicked.connect(self._archive_current_chat)
+
+        self._browse_archive_button = QPushButton("Архив…")
+        self._browse_archive_button.setObjectName("inlineButton")
+        self._browse_archive_button.setFixedHeight(26)
+        self._browse_archive_button.setToolTip("Открыть сохранённый чат из архива")
+        self._browse_archive_button.clicked.connect(self._open_archived_chat_dialog)
+
+        self._restore_archive_button = QPushButton("В список")
+        self._restore_archive_button.setObjectName("inlineButton")
+        self._restore_archive_button.setFixedHeight(26)
+        self._restore_archive_button.setToolTip("Вернуть текущий чат из архива в основной список")
+        self._restore_archive_button.clicked.connect(self._restore_current_from_archive)
+
         chat_hdr = QFrame(self)
         chat_hdr.setObjectName("chatHeaderFrame")
         chat_hdr.setFixedHeight(panel_header_h)
@@ -289,6 +318,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         ch_layout.addWidget(chat_sel_label)
         ch_layout.addWidget(self._chat_selector, 0)
         ch_layout.addWidget(self._new_chat_button, 0)
+        ch_layout.addWidget(self._archive_chat_button, 0)
+        ch_layout.addWidget(self._browse_archive_button, 0)
+        ch_layout.addWidget(self._restore_archive_button, 0)
         mode_lbl = QLabel("Mode:")
         mode_lbl.setObjectName("modeLabelSmall")
         ch_layout.addWidget(mode_lbl)
@@ -397,6 +429,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._status.setObjectName("statusLabel")
         self._status_bar = QStatusBar(self)
         self._status_bar.addWidget(self._status)
+        self._token_status = QLabel("  Чат · токены: —")
+        self._token_status.setObjectName("hintLabel")
+        self._status_bar.addPermanentWidget(self._token_status)
         self.setStatusBar(self._status_bar)
         self._set_status("Ready")
 
@@ -546,11 +581,22 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._chat_events = list(state["chat_events"])
         self._collapsed_blocks = set(state["collapsed_blocks"])
         self._next_block_id = max(1, int(state["next_block_id"]))
+        self._chat_stored_in_archive = bool(state.get("stored_in_archive", False))
+        ut = state.get("usage_totals") or {}
+        self._chat_usage_totals = {
+            "prompt_tokens": int(ut["prompt_tokens"]) if isinstance(ut.get("prompt_tokens"), (int, float)) else 0,
+            "completion_tokens": int(ut["completion_tokens"])
+            if isinstance(ut.get("completion_tokens"), (int, float))
+            else 0,
+            "total_tokens": int(ut["total_tokens"]) if isinstance(ut.get("total_tokens"), (int, float)) else 0,
+        }
         self._mode_selector.blockSignals(True)
         self._mode_selector.setCurrentText(self._mode)
         self._mode_selector.blockSignals(False)
         self._update_chat_placeholder()
         self._render_chat_history()
+        self._update_token_badge()
+        self._refresh_archive_buttons()
 
     def _save_current_chat_session(self) -> None:
         if not self._chat_id:
@@ -564,6 +610,8 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
                 chat_events=self._chat_events,
                 collapsed_blocks=self._collapsed_blocks,
                 next_block_id=self._next_block_id,
+                usage_totals=dict(self._chat_usage_totals),
+                stored_in_archive=self._chat_stored_in_archive,
             )
         except OSError as exc:
             logger.warning("Failed to save chat: %s", exc)
@@ -575,6 +623,13 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             sid = select_id or self._chat_id
             for chat_id, _mtime, title in list_saved_chats(self._workspace):
                 self._chat_selector.addItem(title, chat_id)
+            if sid and self._chat_selector.findData(sid) < 0:
+                arch_label: str | None = None
+                for aid, _mt, atitle in list_archived_chats(self._workspace):
+                    if aid == sid:
+                        arch_label = f"{atitle} (архив)"
+                        break
+                self._chat_selector.insertItem(0, arch_label or f"{sid[:8]}… (архив)", sid)
             idx = self._chat_selector.findData(sid)
             if idx >= 0:
                 self._chat_selector.setCurrentIndex(idx)
@@ -621,6 +676,88 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._save_current_chat_session()
         write_last_chat_id(self._workspace, self._chat_id)
         self._refresh_chat_selector(select_id=self._chat_id)
+
+    def _archive_current_chat(self) -> None:
+        if self._worker_thread is not None:
+            QMessageBox.warning(
+                self,
+                "Chat",
+                "Дождитесь завершения ответа агента.",
+            )
+            return
+        if not self._chat_id or self._chat_stored_in_archive:
+            return
+        self._save_current_chat_session()
+        try:
+            move_chat_to_archive(self._workspace, self._chat_id)
+        except OSError as exc:
+            QMessageBox.critical(self, "Архив", str(exc))
+            return
+
+        others = list_saved_chats(self._workspace)
+        if others:
+            cid = others[0][0]
+            try:
+                state = load_chat_session(self._workspace, cid)
+                self._apply_chat_state(state)
+                write_last_chat_id(self._workspace, cid)
+            except (OSError, ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+                QMessageBox.critical(self, "Chat", str(exc))
+        else:
+            state = fresh_session_state(self._mode)
+            self._apply_chat_state(state)
+            self._save_current_chat_session()
+            write_last_chat_id(self._workspace, self._chat_id)
+        self._refresh_chat_selector(select_id=self._chat_id)
+
+    def _open_archived_chat_dialog(self) -> None:
+        if self._worker_thread is not None:
+            QMessageBox.warning(
+                self,
+                "Chat",
+                "Дождитесь завершения ответа агента.",
+            )
+            return
+        rows = list_archived_chats(self._workspace)
+        if not rows:
+            QMessageBox.information(self, "Архив", "Архив пуст.")
+            return
+        labels = [f"{title}  [{cid[:8]}]" for cid, _mtime, title in rows]
+        choice, ok = QInputDialog.getItem(self, "Архив чатов", "Открыть чат:", labels, 0, False)
+        if not ok:
+            return
+        idx = labels.index(choice)
+        cid = rows[idx][0]
+        self._save_current_chat_session()
+        try:
+            state = load_chat_session(self._workspace, cid)
+            self._apply_chat_state(state)
+            write_last_chat_id(self._workspace, cid)
+        except (OSError, ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+            QMessageBox.critical(self, "Chat", str(exc))
+            return
+        self._refresh_chat_selector(select_id=self._chat_id)
+
+    def _restore_current_from_archive(self) -> None:
+        if self._worker_thread is not None:
+            QMessageBox.warning(
+                self,
+                "Chat",
+                "Дождитесь завершения ответа агента.",
+            )
+            return
+        if not self._chat_id or not self._chat_stored_in_archive:
+            return
+        self._save_current_chat_session()
+        try:
+            move_chat_from_archive(self._workspace, self._chat_id)
+        except OSError as exc:
+            QMessageBox.critical(self, "Архив", str(exc))
+            return
+        self._chat_stored_in_archive = False
+        self._save_current_chat_session()
+        self._refresh_chat_selector(select_id=self._chat_id)
+        self._refresh_archive_buttons()
 
     def _selected_path(self, index: QModelIndex) -> Path:
         return Path(self._tree_model.filePath(index))
@@ -713,6 +850,8 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
     def _reset_chat_session(self, *, announce: bool) -> None:
         self._messages = build_messages(self._mode)
+        self._chat_usage_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self._update_token_badge()
         self._update_chat_placeholder()
         if announce:
             self._append_chat_message(
@@ -734,8 +873,24 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._chat_events.append(ChatEvent(kind="step", title=label, step=step, total=total, group_id=group_id))
         self._render_chat_history()
 
-    def _append_code_block(self, title: str, body: str, *, tone: str = "tool", group_id: str = "") -> None:
+    def _append_code_block(
+        self,
+        title: str,
+        body: str,
+        *,
+        tone: str = "tool",
+        group_id: str = "",
+        usage: dict[str, int] | None = None,
+    ) -> None:
         block_id = self._new_block_id()
+        pu = co = tu = None
+        if usage:
+            if isinstance(usage.get("prompt_tokens"), int):
+                pu = usage["prompt_tokens"]
+            if isinstance(usage.get("completion_tokens"), int):
+                co = usage["completion_tokens"]
+            if isinstance(usage.get("total_tokens"), int):
+                tu = usage["total_tokens"]
         self._chat_events.append(
             ChatEvent(
                 kind="block",
@@ -745,6 +900,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
                 block_id=block_id,
                 collapsible=True,
                 group_id=group_id,
+                usage_prompt_tokens=pu,
+                usage_completion_tokens=co,
+                usage_total_tokens=tu,
             )
         )
         self._collapsed_blocks.add(block_id)
@@ -773,6 +931,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._mode_selector.setDisabled(busy)
         self._chat_selector.setDisabled(busy)
         self._new_chat_button.setDisabled(busy)
+        self._archive_chat_button.setDisabled(busy)
+        self._browse_archive_button.setDisabled(busy)
+        self._restore_archive_button.setDisabled(busy)
         self._save_button.setDisabled(busy)
 
     def _send_chat(self) -> None:
@@ -787,6 +948,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._chat_input.clear()
         self._messages.append(UserMessage(prompt))
         self._append_chat_message("You", prompt, tone="user")
+
+        self._turn_prompt_tokens = 0
+        self._turn_completion_tokens = 0
 
         self._work_group_id = self._new_block_id()
         self._work_start_time = time.monotonic()
@@ -829,8 +993,44 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
     def _handle_step_started(self, step: int, total: int) -> None:
         self._append_step_header(step, total, f"{self._mode.upper()} формирует следующий шаг", group_id=self._work_group_id)
 
-    def _handle_assistant_response(self, step: int, raw_response: str) -> None:
-        self._append_code_block(f"Assistant JSON, шаг {step}", raw_response, tone="assistant", group_id=self._work_group_id)
+    def _merge_completion_usage(self, usage: object) -> None:
+        if not isinstance(usage, dict):
+            return
+        pr = usage.get("prompt_tokens")
+        co = usage.get("completion_tokens")
+        tot = usage.get("total_tokens")
+        if isinstance(pr, int):
+            self._turn_prompt_tokens += pr
+            self._chat_usage_totals["prompt_tokens"] += pr
+        if isinstance(co, int):
+            self._turn_completion_tokens += co
+            self._chat_usage_totals["completion_tokens"] += co
+        if isinstance(tot, int):
+            self._chat_usage_totals["total_tokens"] += tot
+        self._update_token_badge()
+
+    def _update_token_badge(self) -> None:
+        p = self._chat_usage_totals["prompt_tokens"]
+        c = self._chat_usage_totals["completion_tokens"]
+        t = self._chat_usage_totals["total_tokens"]
+        extra = f" · Σ {t}" if t else ""
+        self._token_status.setText(f"  Чат · токены: in {p} / out {c}{extra}")
+
+    def _refresh_archive_buttons(self) -> None:
+        self._archive_chat_button.setEnabled(bool(self._chat_id) and not self._chat_stored_in_archive)
+        self._restore_archive_button.setEnabled(bool(self._chat_id) and self._chat_stored_in_archive)
+        self._restore_archive_button.setVisible(self._chat_stored_in_archive)
+
+    def _handle_assistant_response(self, step: int, raw_response: str, usage: object = None) -> None:
+        self._merge_completion_usage(usage)
+        udict = usage if isinstance(usage, dict) else None
+        self._append_code_block(
+            f"Assistant JSON, шаг {step}",
+            raw_response,
+            tone="assistant",
+            group_id=self._work_group_id,
+            usage=udict,
+        )
 
     def _handle_repair_requested(self, step: int, message: str) -> None:
         self._append_code_block(f"Invalid response, шаг {step}", message, tone="error", group_id=self._work_group_id)
@@ -859,7 +1059,10 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
     def _finalise_work_group(self, *, label: str) -> None:
         if self._work_group_header is not None:
             elapsed = time.monotonic() - self._work_start_time
-            self._work_group_header.title = f"{label} {_format_duration(elapsed)}"
+            tok = ""
+            if self._turn_prompt_tokens or self._turn_completion_tokens:
+                tok = f" · ответ: in {self._turn_prompt_tokens} / out {self._turn_completion_tokens}"
+            self._work_group_header.title = f"{label} {_format_duration(elapsed)}{tok}"
             self._collapsed_blocks.add(self._work_group_id)
         self._work_group_id = ""
         self._work_group_header = None

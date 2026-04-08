@@ -169,6 +169,7 @@ def test_allowed_commands_for_ask_mode_are_read_only():
 
 def test_allowed_commands_for_agent_mode_include_write_actions():
     assert _allowed_commands_for_mode("agent") == {
+        "codeact",
         "createFiles",
         "createFolders",
         "done",

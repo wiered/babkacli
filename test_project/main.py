@@ -1,3 +1,6 @@
+# import logging (removed as logger replaced with print)
+logger = logging.getLogger(__name__)
+
 from sorts.quicksort import quicksort
 from sorts.bubblesort import bubblesort
 from sorts.stalinsort import stalinsort
@@ -9,47 +12,47 @@ arr = generate_random_array(size=10000)
 
 # Используем start_timer для измерения времени работы quicksort
 qs_time = start_timer(quicksort, arr)
-print(f"Время работы quicksort: {qs_time:.6f} секунд")
+logger.info(f"Время работы quicksort: {qs_time:.6f} секунд")
 
 # Используем start_timer для измерения времени работы bubblesort
 bs_time = start_timer(bubblesort, arr)
-print(f"Время работы bubblesort: {bs_time:.6f} секунд")
+logger.info(f"Время работы bubblesort: {bs_time:.6f} секунд")
 
 # Используем start_timer для измерения времени работы stalinsort
 ss_time = start_timer(stalinsort, arr)
-print(f"Время работы stalinsort: {ss_time:.6f} секунд")
+logger.info(f"Время работы stalinsort: {ss_time:.6f} секунд")
 
 # Используем start_timer для измерения времени работы insertionsort
 is_time = start_timer(insertionsort, arr)
-print(f"Время работы insertionsort: {is_time:.6f} секунд")
+logger.info(f"Время работы insertionsort: {is_time:.6f} секунд")
 
 # Вывод разницы во времени
 if qs_time < bs_time:
-    print(f"Quicksort быстрее bubblesort на {bs_time - qs_time:.6f} секунд")
+    logger.info(f"Quicksort быстрее bubblesort на {bs_time - qs_time:.6f} секунд")
 else:
-    print(f"Bubblesort быстрее quicksort на {qs_time - bs_time:.6f} секунд")
+    logger.info(f"Bubblesort быстрее quicksort на {qs_time - bs_time:.6f} секунд")
 
 if qs_time < ss_time:
-    print(f"Quicksort быстрее stalinsort на {ss_time - qs_time:.6f} секунд")
+    logger.info(f"Quicksort быстрее stalinsort на {ss_time - qs_time:.6f} секунд")
 else:
-    print(f"Stalinsort быстрее quicksort на {qs_time - ss_time:.6f} секунд")
+    logger.info(f"Stalinsort быстрее quicksort на {qs_time - ss_time:.6f} секунд")
 
 if bs_time < ss_time:
-    print(f"Bubblesort быстрее stalinsort на {ss_time - bs_time:.6f} секунд")
+    logger.info(f"Bubblesort быстрее stalinsort на {ss_time - bs_time:.6f} секунд")
 else:
-    print(f"Stalinsort быстрее bubblesort на {bs_time - ss_time:.6f} секунд")
+    logger.info(f"Stalinsort быстрее bubblesort на {bs_time - ss_time:.6f} секунд")
 
 if qs_time < is_time:
-    print(f"Quicksort быстрее insertionsort на {is_time - qs_time:.6f} секунд")
+    logger.info(f"Quicksort быстрее insertionsort на {is_time - qs_time:.6f} секунд")
 else:
-    print(f"Insertionsort быстрее quicksort на {qs_time - is_time:.6f} секунд")
+    logger.info(f"Insertionsort быстрее quicksort на {qs_time - is_time:.6f} секунд")
 
 if bs_time < is_time:
-    print(f"Bubblesort быстрее insertionsort на {is_time - bs_time:.6f} секунд")
+    logger.info(f"Bubblesort быстрее insertionsort на {is_time - bs_time:.6f} секунд")
 else:
-    print(f"Insertionsort быстрее bubblesort на {bs_time - is_time:.6f} секунд")
+    logger.info(f"Insertionsort быстрее bubblesort на {bs_time - is_time:.6f} секунд")
 
 if ss_time < is_time:
-    print(f"Stalinsort быстрее insertionsort на {is_time - ss_time:.6f} секунд")
+    logger.info(f"Stalinsort быстрее insertionsort на {is_time - ss_time:.6f} секунд")
 else:
-    print(f"Insertionsort быстрее stalinsort на {ss_time - is_time:.6f} секунд")
+    logger.info(f"Insertionsort быстрее stalinsort на {ss_time - is_time:.6f} секунд")

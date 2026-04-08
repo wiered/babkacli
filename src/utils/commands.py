@@ -24,12 +24,12 @@ class CommandOutcome:
     data: dict[str, Any]
 
 
-def _workspace_root() -> Path:
+def workspace_root() -> Path:
     return Path.cwd().resolve()
 
 
-def _resolve_within_workspace(path: str | Path) -> Path:
-    root = _workspace_root()
+def resolve_within_workspace(path: str | Path) -> Path:
+    root = workspace_root()
     resolved = (root / Path(path)).resolve()
     if root not in resolved.parents and resolved != root:
         raise CommandExecutionError(f"Path escapes workspace root: {path}")
@@ -39,7 +39,7 @@ def _resolve_within_workspace(path: str | Path) -> Path:
 def ls(path: str = ".") -> dict[str, Any]:
     """List files and directories under a path."""
 
-    target = _resolve_within_workspace(path)
+    target = resolve_within_workspace(path)
     if not target.exists():
         raise CommandExecutionError(f"Path does not exist: {path}")
     if not target.is_dir():
@@ -50,11 +50,11 @@ def ls(path: str = ".") -> dict[str, Any]:
         entries.append(
             {
                 "name": entry.name,
-                "path": str(entry.relative_to(_workspace_root())),
+                "path": str(entry.relative_to(workspace_root())),
                 "type": "dir" if entry.is_dir() else "file",
             }
         )
-    return {"path": str(target.relative_to(_workspace_root())), "entries": entries}
+    return {"path": str(target.relative_to(workspace_root())), "entries": entries}
 
 
 def readfiles(paths: list[str]) -> dict[str, Any]:
@@ -65,14 +65,14 @@ def readfiles(paths: list[str]) -> dict[str, Any]:
 
     files = []
     for raw_path in paths:
-        target = _resolve_within_workspace(raw_path)
+        target = resolve_within_workspace(raw_path)
         if not target.exists():
             raise CommandExecutionError(f"File does not exist: {raw_path}")
         if not target.is_file():
             raise CommandExecutionError(f"Path is not a file: {raw_path}")
         files.append(
             {
-                "path": str(target.relative_to(_workspace_root())),
+                "path": str(target.relative_to(workspace_root())),
                 "content": target.read_text(encoding="utf-8"),
             }
         )
@@ -82,11 +82,11 @@ def readfiles(paths: list[str]) -> dict[str, Any]:
 def writefile(path: str, content: str) -> dict[str, Any]:
     """Create or overwrite a file inside the workspace."""
 
-    target = _resolve_within_workspace(path)
+    target = resolve_within_workspace(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return {
-        "path": str(target.relative_to(_workspace_root())),
+        "path": str(target.relative_to(workspace_root())),
         "written": True,
         "bytes": len(content.encode("utf-8")),
     }
@@ -102,11 +102,11 @@ def createFolders(paths: list[str]) -> dict[str, Any]:
 
     created = []
     for raw_path in paths:
-        target = _resolve_within_workspace(raw_path)
+        target = resolve_within_workspace(raw_path)
         target.mkdir(parents=True, exist_ok=True)
         created.append(
             {
-                "path": str(target.relative_to(_workspace_root())),
+                "path": str(target.relative_to(workspace_root())),
                 "created": True,
             }
         )
@@ -133,12 +133,12 @@ def createFiles(files: list[dict[str, Any]]) -> dict[str, Any]:
         if not isinstance(content, str):
             raise CommandExecutionError("Each file 'content' must be a string when provided.")
 
-        target = _resolve_within_workspace(raw_path)
+        target = resolve_within_workspace(raw_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         created.append(
             {
-                "path": str(target.relative_to(_workspace_root())),
+                "path": str(target.relative_to(workspace_root())),
                 "written": True,
                 "bytes": len(content.encode("utf-8")),
             }
@@ -150,17 +150,56 @@ def createFiles(files: list[dict[str, Any]]) -> dict[str, Any]:
 def _python_interpreter() -> Path:
     """Return the preferred Python interpreter for workspace scripts."""
 
-    root = _workspace_root()
+    root = workspace_root()
     venv_python = root / ".venv" / "Scripts" / "python.exe"
     if venv_python.exists():
         return venv_python
     return Path(sys.executable)
 
 
+def codeact(code: str) -> dict[str, Any]:
+    """Run Python source in the workspace; ``CodeAct`` is pre-imported in the child process."""
+
+    if not isinstance(code, str) or not code.strip():
+        raise CommandExecutionError("'code' must be a non-empty string.")
+
+    root = workspace_root()
+    interp = _python_interpreter()
+    bootstrap = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(root)!r})",
+            "from src.codeact.codeact import CodeAct",
+            f"exec(compile({code!r}, '<codeact>', 'exec'))",
+        ]
+    )
+
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+
+    completed = subprocess.run(
+        [str(interp), "-c", bootstrap],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+    return {
+        "interpreter": str(interp),
+        "returncode": completed.returncode,
+        "stdout": completed.stdout or "",
+        "stderr": completed.stderr or "",
+    }
+
+
 def runpy(path: str, args: list[str] | None = None) -> dict[str, Any]:
     """Run a Python file inside the workspace and capture its output."""
 
-    target = _resolve_within_workspace(path)
+    target = resolve_within_workspace(path)
     if not target.exists():
         raise CommandExecutionError(f"File does not exist: {path}")
     if not target.is_file():
@@ -179,7 +218,7 @@ def runpy(path: str, args: list[str] | None = None) -> dict[str, Any]:
 
     completed = subprocess.run(
         command_args,
-        cwd=_workspace_root(),
+        cwd=workspace_root(),
         env=env,
         capture_output=True,
         text=True,
@@ -189,7 +228,7 @@ def runpy(path: str, args: list[str] | None = None) -> dict[str, Any]:
     )
 
     return {
-        "path": str(target.relative_to(_workspace_root())),
+        "path": str(target.relative_to(workspace_root())),
         "interpreter": str(Path(command_args[0])),
         "args": command_args[2:],
         "returncode": completed.returncode,
@@ -207,6 +246,7 @@ def done(result: str) -> dict[str, Any]:
 
 
 COMMAND_HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
+    "codeact": codeact,
     "createFiles": createFiles,
     "createFolders": createFolders,
     "ls": ls,

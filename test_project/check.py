@@ -1,3 +1,6 @@
+# import logging (removed as logger replaced with print)
+logger = logging.getLogger(__name__)
+
 import random
 from sorts.bubblesort import bubblesort
 from sorts.insertionsort import insertionsort
@@ -13,12 +16,12 @@ def is_sorted(arr):
 
 # Generate random lists and test sorting algorithms
 for sort_func in sorting_algorithms:
-    print(f"Testing {sort_func.__name__}...")
+    logger.info(f"Testing {sort_func.__name__}...")
     for i in range(10):
         test_list = [random.randint(0, 1000) for _ in range(100)]
         sorted_list = sort_func(test_list)
         if is_sorted(sorted_list):
-            print(f"Test {i + 1}: PASS")
+            logger.info(f"Test {i + 1}: PASS")
         else:
-            print(f"Test {i + 1}: FAIL")
-    print()
+            logger.info(f"Test {i + 1}: FAIL")
+    logger.info("")

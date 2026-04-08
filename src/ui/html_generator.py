@@ -19,6 +19,27 @@ def get_copy_block(block_id: str) -> str | None:
     return _copy_blocks.get(block_id)
 
 
+def _usage_caption_html(event: ChatEvent, *, mono_css: str) -> str:
+    if (
+        event.usage_prompt_tokens is None
+        and event.usage_completion_tokens is None
+        and event.usage_total_tokens is None
+    ):
+        return ""
+    parts: list[str] = []
+    if event.usage_prompt_tokens is not None:
+        parts.append(f"in {event.usage_prompt_tokens}")
+    if event.usage_completion_tokens is not None:
+        parts.append(f"out {event.usage_completion_tokens}")
+    if event.usage_total_tokens is not None:
+        parts.append(f"Σ {event.usage_total_tokens}")
+    cap = " · ".join(parts)
+    return (
+        f'<div style="font-size:10px;color:#606060;margin:0 0 4px 0;'
+        f' font-family:{mono_css};">{html.escape(cap)}</div>'
+    )
+
+
 # ── Markdown → HTML ────────────────────────────────────────────────────────────
 
 def _md_to_html(text: str, *, mono: str, copy_store: dict[str, str]) -> str:
@@ -459,6 +480,7 @@ def render_chat_history(chat_events: list[ChatEvent], collapsed_blocks: set[str]
                     content_html = f'<pre style="color: #b0b0b0;">{html.escape(event.body)}</pre>'
 
                 label_color = "#5a9a6e" if event.tone == "assistant" else "#888888"
+                usage_html = _usage_caption_html(event, mono_css=_mono)
                 html_parts.append(f"""
 <div style="margin: 4px 0 10px 0;">
   <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
@@ -466,6 +488,7 @@ def render_chat_history(chat_events: list[ChatEvent], collapsed_blocks: set[str]
        letter-spacing:0.08em; text-transform:uppercase;"
        href="toggle:{bid_esc}">{title_esc}&nbsp;{toggle_icon}</a>
   </div>
+  {usage_html}
   {content_html}
 </div>
 """)

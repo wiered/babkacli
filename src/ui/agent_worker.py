@@ -58,7 +58,7 @@ class AgentWorker(QObject):
     """Run one user request against the agent in a background thread."""
 
     step_started = Signal(int, int)
-    assistant_response = Signal(int, str)
+    assistant_response = Signal(int, str, object)
     repair_requested = Signal(int, str)
     command_executed = Signal(int, str, object)
     finished = Signal(str, object)
@@ -89,9 +89,9 @@ class AgentWorker(QObject):
 
             for step in range(1, self._max_steps + 1):
                 self.step_started.emit(step, self._max_steps)
-                raw_response = call_model(client, messages=messages, model=self._model)
+                raw_response, usage = call_model(client, messages=messages, model=self._model)
                 messages.append(AssistantMessage(content=raw_response))
-                self.assistant_response.emit(step, raw_response)
+                self.assistant_response.emit(step, raw_response, usage)
 
                 try:
                     parsed = parse_agent_response(

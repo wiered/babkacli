@@ -18,7 +18,16 @@ ENDPOINT = "https://models.github.ai/inference"
 SUPPORTED_MODES = ("ask", "agent")
 ALLOWED_COMMANDS_BY_MODE: dict[str, set[str]] = {
     "ask": {"done", "ls", "readfiles"},
-    "agent": {"createFiles", "createFolders", "done", "ls", "readfiles", "runpy", "writefile"},
+    "agent": {
+        "codeact",
+        "createFiles",
+        "createFolders",
+        "done",
+        "ls",
+        "readfiles",
+        "runpy",
+        "writefile",
+    },
 }
 
 
@@ -47,6 +56,9 @@ class ChatEvent:
     block_id: str = ""
     collapsible: bool = False
     group_id: str = ""
+    usage_prompt_tokens: int | None = None
+    usage_completion_tokens: int | None = None
+    usage_total_tokens: int | None = None
 
 
 
@@ -107,6 +119,44 @@ def _run_python(workspace: Path, path: str, args: list[str] | None = None) -> di
         "stdout": completed.stdout or "",
         "stderr": completed.stderr or "",
     }
+
+
+def _run_codeact(workspace: Path, code: str) -> dict[str, Any]:
+    if not isinstance(code, str) or not code.strip():
+        raise WorkspaceCommandError("'code' must be a non-empty string.")
+
+    root = workspace.resolve()
+    interp = _python_interpreter(workspace)
+    bootstrap = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(root)!r})",
+            "from src.codeact.codeact import CodeAct",
+            f"exec(compile({code!r}, '<codeact>', 'exec'))",
+        ]
+    )
+
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+
+    completed = subprocess.run(
+        [str(interp), "-c", bootstrap],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+    return {
+        "interpreter": str(interp),
+        "returncode": completed.returncode,
+        "stdout": completed.stdout or "",
+        "stderr": completed.stderr or "",
+    }
+
 
 def _list_directory(workspace: Path, path: str = ".") -> dict[str, Any]:
     target = _resolve_within_workspace(workspace, path)
@@ -219,12 +269,27 @@ def allowed_commands_for_mode(mode: str) -> set[str]:
     normalized = normalize_mode(mode)
     return set(ALLOWED_COMMANDS_BY_MODE[normalized])
 
+
+def extract_completion_usage(response: Any) -> dict[str, int] | None:
+    """Pull token counts from an Azure ``ChatCompletions`` response when present."""
+
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    out: dict[str, int] = {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        raw = getattr(usage, key, None)
+        if isinstance(raw, int) and raw >= 0:
+            out[key] = raw
+    return out or None
+
+
 def call_model(
     client: ChatCompletionsClient,
     *,
     messages: list[Any],
     model: str,
-) -> str:
+) -> tuple[str, dict[str, int] | None]:
     response = client.complete(
         messages=messages,
         model=model,
@@ -234,7 +299,7 @@ def call_model(
 
     message = response.choices[0].message
     content = message.content if message and message.content else ""
-    return content.strip()
+    return content.strip(), extract_completion_usage(response)
 
 def dispatch_workspace_command(workspace: Path, command: str, arguments: dict[str, Any]) -> CommandOutcome:
     if command == "ls":
@@ -249,13 +314,17 @@ def dispatch_workspace_command(workspace: Path, command: str, arguments: dict[st
         data = _write_file(workspace, **arguments)
     elif command == "runpy":
         data = _run_python(workspace, **arguments)
+    elif command == "codeact":
+        data = _run_codeact(workspace, **arguments)
     elif command == "done":
         result = arguments.get("result")
         if not isinstance(result, str) or not result.strip():
             raise WorkspaceCommandError("'result' must be a non-empty string.")
         data = {"result": result}
     else:
-        allowed = ", ".join(["createFiles", "createFolders", "done", "ls", "readfiles", "runpy", "writefile"])
+        allowed = ", ".join(
+            ["codeact", "createFiles", "createFolders", "done", "ls", "readfiles", "runpy", "writefile"]
+        )
         raise WorkspaceCommandError(f"Unsupported command '{command}'. Allowed: {allowed}.")
 
     return CommandOutcome(command=command, data=data)

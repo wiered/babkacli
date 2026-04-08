@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from .ui_utils import ChatEvent, build_messages, normalize_mode
 
 FORMAT_VERSION = 1
 CHATS_SUBDIR = Path(".babka") / "chats"
+CHATS_ARCHIVE_SUBDIR = CHATS_SUBDIR / "archive"
 LAST_CHAT_FILE = Path(".babka") / "last_chat.json"
 
 
@@ -39,6 +41,27 @@ def chat_file_path(workspace: Path, chat_id: str) -> Path:
     return ensure_chats_dir(workspace) / f"{safe}.json"
 
 
+def archived_chat_file_path(workspace: Path, chat_id: str) -> Path:
+    safe = chat_id.replace("/", "").replace("\\", "").replace("..", "")
+    if not safe:
+        raise ValueError("Invalid chat id")
+    root = workspace / CHATS_ARCHIVE_SUBDIR
+    root.mkdir(parents=True, exist_ok=True)
+    return root / f"{safe}.json"
+
+
+def resolve_chat_file(workspace: Path, chat_id: str) -> tuple[Path, bool] | None:
+    """Return ``(path, is_archived)`` if a chat JSON exists, else ``None``."""
+
+    active = chat_file_path(workspace, chat_id)
+    if active.is_file():
+        return active, False
+    archived = archived_chat_file_path(workspace, chat_id)
+    if archived.is_file():
+        return archived, True
+    return None
+
+
 def list_saved_chats(workspace: Path) -> list[tuple[str, float, str]]:
     """Return `(chat_id, mtime, title)` sorted by mtime descending (newest first)."""
     root = chats_dir(workspace)
@@ -61,6 +84,53 @@ def list_saved_chats(workspace: Path) -> list[tuple[str, float, str]]:
         rows.append((chat_id, st.st_mtime, title))
     rows.sort(key=lambda x: x[1], reverse=True)
     return rows
+
+
+def list_archived_chats(workspace: Path) -> list[tuple[str, float, str]]:
+    """Return `(chat_id, mtime, title)` for chats in `.babka/chats/archive/`."""
+
+    root = workspace / CHATS_ARCHIVE_SUBDIR
+    if not root.is_dir():
+        return []
+    rows: list[tuple[str, float, str]] = []
+    for path in root.glob("*.json"):
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+        chat_id = path.stem
+        title = chat_id
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and isinstance(data.get("title"), str) and data["title"].strip():
+                title = data["title"].strip()
+        except (OSError, json.JSONDecodeError, TypeError):
+            pass
+        rows.append((chat_id, st.st_mtime, title))
+    rows.sort(key=lambda x: x[1], reverse=True)
+    return rows
+
+
+def move_chat_to_archive(workspace: Path, chat_id: str) -> None:
+    """Move ``<id>.json`` from active chats to ``chats/archive/``."""
+
+    src = chat_file_path(workspace, chat_id)
+    if not src.is_file():
+        raise FileNotFoundError(src)
+    dst = archived_chat_file_path(workspace, chat_id)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dst))
+
+
+def move_chat_from_archive(workspace: Path, chat_id: str) -> None:
+    """Move ``<id>.json`` from archive back to active ``chats/``."""
+
+    src = archived_chat_file_path(workspace, chat_id)
+    if not src.is_file():
+        raise FileNotFoundError(src)
+    dst = chat_file_path(workspace, chat_id)
+    ensure_chats_dir(workspace)
+    shutil.move(str(src), str(dst))
 
 
 def read_last_chat_id(workspace: Path) -> str | None:
@@ -129,6 +199,16 @@ def chat_events_from_json(items: list[dict[str, Any]]) -> list[ChatEvent]:
         step = step_v if isinstance(step_v, int) else None
         total_v = raw.get("total")
         total = total_v if isinstance(total_v, int) else None
+        def _opt_int(key: str) -> int | None:
+            v = raw.get(key)
+            if isinstance(v, bool) or v is None:
+                return None
+            if isinstance(v, int):
+                return v
+            if isinstance(v, float):
+                return int(v)
+            return None
+
         out.append(
             ChatEvent(
                 kind=str(raw.get("kind", "message")),
@@ -140,6 +220,9 @@ def chat_events_from_json(items: list[dict[str, Any]]) -> list[ChatEvent]:
                 block_id=str(raw.get("block_id", "")),
                 collapsible=bool(raw.get("collapsible", False)),
                 group_id=str(raw.get("group_id", "")),
+                usage_prompt_tokens=_opt_int("usage_prompt_tokens"),
+                usage_completion_tokens=_opt_int("usage_completion_tokens"),
+                usage_total_tokens=_opt_int("usage_total_tokens"),
             )
         )
     return out
@@ -171,11 +254,13 @@ def save_chat_session(
     collapsed_blocks: set[str],
     next_block_id: int,
     title: str | None = None,
+    usage_totals: dict[str, int] | None = None,
+    stored_in_archive: bool = False,
 ) -> None:
-    """Write the full chat state to `.babka/chats/<id>.json`."""
+    """Write the full chat state to `.babka/chats/<id>.json` (or under ``chats/archive/``)."""
     mode_norm = normalize_mode(mode)
     t = (title or "").strip() or derive_title(messages, chat_events)
-    path = chat_file_path(workspace, chat_id)
+    path = archived_chat_file_path(workspace, chat_id) if stored_in_archive else chat_file_path(workspace, chat_id)
     created = _utc_now_iso()
     try:
         if path.is_file():
@@ -184,6 +269,11 @@ def save_chat_session(
                 created = prev["created_at"]
     except (OSError, json.JSONDecodeError, TypeError):
         pass
+
+    ut = usage_totals or {}
+    prompt_tok = int(ut.get("prompt_tokens", 0)) if isinstance(ut.get("prompt_tokens"), (int, float)) else 0
+    completion_tok = int(ut.get("completion_tokens", 0)) if isinstance(ut.get("completion_tokens"), (int, float)) else 0
+    total_tok = int(ut.get("total_tokens", 0)) if isinstance(ut.get("total_tokens"), (int, float)) else 0
 
     payload = {
         "version": FORMAT_VERSION,
@@ -196,14 +286,20 @@ def save_chat_session(
         "chat_events": chat_events_to_json(chat_events),
         "collapsed_blocks": sorted(collapsed_blocks),
         "next_block_id": next_block_id,
+        "usage_totals": {
+            "prompt_tokens": prompt_tok,
+            "completion_tokens": completion_tok,
+            "total_tokens": total_tok,
+        },
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def load_chat_session(workspace: Path, chat_id: str) -> dict[str, Any]:
-    path = chat_file_path(workspace, chat_id)
-    if not path.is_file():
-        raise FileNotFoundError(path)
+    resolved = resolve_chat_file(workspace, chat_id)
+    if resolved is None:
+        raise FileNotFoundError(chat_file_path(workspace, chat_id))
+    path, stored_in_archive = resolved
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError("Invalid chat file")
@@ -233,6 +329,19 @@ def load_chat_session(workspace: Path, chat_id: str) -> dict[str, Any]:
     title = data.get("title")
     title_str = str(title).strip() if isinstance(title, str) else ""
 
+    ut_raw = data.get("usage_totals")
+    if isinstance(ut_raw, dict):
+        pr = ut_raw.get("prompt_tokens", 0)
+        co = ut_raw.get("completion_tokens", 0)
+        to = ut_raw.get("total_tokens", 0)
+        usage_totals = {
+            "prompt_tokens": int(pr) if isinstance(pr, (int, float)) else 0,
+            "completion_tokens": int(co) if isinstance(co, (int, float)) else 0,
+            "total_tokens": int(to) if isinstance(to, (int, float)) else 0,
+        }
+    else:
+        usage_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
     return {
         "chat_id": chat_id,
         "mode": mode,
@@ -241,6 +350,8 @@ def load_chat_session(workspace: Path, chat_id: str) -> dict[str, Any]:
         "collapsed_blocks": collapsed_blocks,
         "next_block_id": max(1, next_block_id),
         "title": title_str or derive_title(messages, chat_events),
+        "usage_totals": usage_totals,
+        "stored_in_archive": stored_in_archive,
     }
 
 
@@ -259,4 +370,6 @@ def fresh_session_state(mode: str) -> dict[str, Any]:
         "collapsed_blocks": set(),
         "next_block_id": 1,
         "title": "New chat",
+        "usage_totals": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+        "stored_in_archive": False,
     }
