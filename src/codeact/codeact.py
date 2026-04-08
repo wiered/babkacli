@@ -1,6 +1,7 @@
 from .files import CodeActFiles
 from .search import CodeActSearch
 
+
 class CodeAct:
     def __init__(self):
         self._files = CodeActFiles()

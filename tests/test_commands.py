@@ -143,11 +143,52 @@ def test_runpy_rejects_non_python_files(workspace):
         runpy("main.txt")
 
 
+def test_codeact_prints_top_level_expression_stdout(workspace):
+    (workspace / "shown.txt").write_text("ok", encoding="utf-8")
+    result = codeact(code_lines=["ca.files.ls('.')"])
+    assert result["returncode"] == 0, result["stderr"]
+    assert "entries" in result["stdout"]
+    assert "shown.txt" in result["stdout"]
+
+
+def test_codeact_top_level_print_not_wrapped_with_repr(workspace):
+    """Avoid ``print(repr(print(...)))`` appending a stray ``None`` line."""
+    result = codeact(code_lines=["print('only')"])
+    assert result["returncode"] == 0, result["stderr"]
+    assert result["stdout"] == "only\n"
+    assert "None" not in result["stdout"]
+
+
+def test_codeact_long_source_uses_stdin_not_cmdline(workspace):
+    """Avoid OS command-line limits when embedding huge source in ``python -c``."""
+    padding = "# " + "x" * 12000
+    result = codeact(code_lines=[padding, "ca.files.ls('.')"])
+    assert result["returncode"] == 0, result["stderr"]
+    assert "entries" in result["stdout"]
+
+
+def test_codeact_runs_multistep_script(workspace):
+    (workspace / "n.txt").write_text("42", encoding="utf-8")
+    result = codeact(
+        code_lines=[
+            "paths = ['n.txt']",
+            "for p in paths:",
+            "    print(ca.files.read(p)['content'])",
+        ]
+    )
+    assert result["returncode"] == 0, result["stderr"]
+    assert "42" in result["stdout"]
+
+
 def test_codeact_rejects_blank_code(workspace):
-    with pytest.raises(CommandExecutionError, match="non-empty string"):
+    with pytest.raises(CommandExecutionError, match="Provide non-empty"):
         codeact("")
-    with pytest.raises(CommandExecutionError, match="non-empty string"):
+    with pytest.raises(CommandExecutionError, match="Provide non-empty"):
         codeact("  \n  ")
+    with pytest.raises(CommandExecutionError, match="Provide non-empty"):
+        codeact(code_lines=[])
+    with pytest.raises(CommandExecutionError, match="Provide non-empty"):
+        codeact(code_lines=["", "  "])
 
 
 def test_codeact_runs_python_with_codeact_in_project_root(monkeypatch):
@@ -188,6 +229,33 @@ def test_parse_and_dispatch_executes_codeact(monkeypatch):
         assert scratch.read_text(encoding="utf-8") == "x"
     finally:
         scratch.unlink(missing_ok=True)
+
+
+def test_parse_and_dispatch_codeact_prefers_code_lines(monkeypatch):
+    project_root = Path(__file__).resolve().parents[1]
+    scratch = project_root / "test_project" / "_codeact_lines_dispatch_test.txt"
+    monkeypatch.chdir(project_root)
+    try:
+        scratch.unlink(missing_ok=True)
+        raw = json.dumps(
+            {
+                "command": "codeact",
+                "code_lines": [
+                    'ca.files.write("test_project/_codeact_lines_dispatch_test.txt", "from_lines")',
+                ],
+            }
+        )
+        outcome = parse_and_dispatch_agent_response(raw)
+        assert outcome.command == "codeact"
+        assert outcome.data["returncode"] == 0
+        assert scratch.read_text(encoding="utf-8") == "from_lines"
+    finally:
+        scratch.unlink(missing_ok=True)
+
+
+def test_codeact_rejects_code_lines_non_strings():
+    with pytest.raises(CommandExecutionError, match="only strings"):
+        codeact(code_lines=[1, 2])
 
 
 def test_done_rejects_blank_result():

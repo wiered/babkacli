@@ -55,6 +55,12 @@ class CodeActFiles:
             "content": target.read_text(encoding="utf-8"),
         }
 
+    def readfiles(self, paths: list[str]) -> dict[str, Any]:
+        """Read multiple files; same shape as the JSON ``readfiles`` command."""
+        if not paths:
+            raise CodeActFilesError("'paths' must be a non-empty list.")
+        return {"files": [self.read(p) for p in paths]}
+
     def write(self, path: str, content: str) -> dict[str, Any]:
         """Create or overwrite a single file inside the workspace."""
         target = resolve(path)

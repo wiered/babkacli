@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 import os
 import subprocess
@@ -144,11 +145,99 @@ def _python_interpreter() -> Path:
     return Path(sys.executable)
 
 
-def codeact(code: str) -> dict[str, Any]:
-    """Run Python source in the workspace; ``CodeAct`` and ``ca`` (a default instance) are in scope."""
+def _resolve_codeact_source(
+    code: str | None,
+    code_lines: list[Any] | None,
+) -> str:
+    """Prefer ``code_lines`` (no string escaping) over a single ``code`` string."""
 
-    if not isinstance(code, str) or not code.strip():
-        raise CommandExecutionError("'code' must be a non-empty string.")
+    if code_lines is not None:
+        if not isinstance(code_lines, list):
+            raise CommandExecutionError("'code_lines' must be a JSON array of strings.")
+        if code_lines:
+            if not all(isinstance(line, str) for line in code_lines):
+                raise CommandExecutionError("'code_lines' must contain only strings.")
+            joined = "\n".join(code_lines)
+            if joined.strip():
+                return joined
+
+    if isinstance(code, str) and code.strip():
+        return code
+
+    raise CommandExecutionError(
+        "Provide non-empty 'code' (string) or 'code_lines' (non-empty array of strings, one source line per element)."
+    )
+
+
+def _codeact_is_print_call(expr: ast.expr) -> bool:
+    """True if ``expr`` is a call to the builtin ``print`` (by name)."""
+
+    return (
+        isinstance(expr, ast.Call)
+        and isinstance(expr.func, ast.Name)
+        and expr.func.id == "print"
+    )
+
+
+def _codeact_wrap_top_level_expr_prints(source: str) -> str:
+    """
+    Turn bare top-level expressions into ``print(repr(...))`` so API return values reach stdout.
+
+    Skips a leading module docstring (a string literal as the first statement).
+    Does not wrap ``print(...)`` — wrapping would emit ``print(repr(print(...)))`` and append ``None``.
+    """
+
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return source
+
+    new_body: list[ast.stmt] = []
+    for i, node in enumerate(tree.body):
+        if isinstance(node, ast.Expr):
+            if (
+                i == 0
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                new_body.append(node)
+                continue
+            if _codeact_is_print_call(node.value):
+                new_body.append(node)
+                continue
+            new_body.append(
+                ast.Expr(
+                    value=ast.Call(
+                        func=ast.Name(id="print", ctx=ast.Load()),
+                        args=[
+                            ast.Call(
+                                func=ast.Name(id="repr", ctx=ast.Load()),
+                                args=[node.value],
+                                keywords=[],
+                            )
+                        ],
+                        keywords=[],
+                    )
+                )
+            )
+        else:
+            new_body.append(node)
+
+    tree.body = new_body
+    return ast.unparse(tree)
+
+
+def codeact(code: str | None = None, code_lines: list[Any] | None = None) -> dict[str, Any]:
+    """
+    CodeAct-style action: run an arbitrary Python program in the workspace.
+
+    The JSON ``command`` field is only transport; the payload is real Python you can compose
+    (variables, control flow, stdlib) while ``ca`` exposes workspace-bound ``.files`` and ``.search``.
+    Observation for the next turn is ``returncode``, ``stdout``, and ``stderr`` (tracebacks on failure).
+    User source is passed on stdin so large scripts are not limited by OS command-line length.
+    """
+
+    source = _codeact_wrap_top_level_expr_prints(_resolve_codeact_source(code, code_lines))
 
     root = workspace_root()
     interp = _python_interpreter()
@@ -158,7 +247,7 @@ def codeact(code: str) -> dict[str, Any]:
             f"sys.path.insert(0, {str(root)!r})",
             "from src.codeact.codeact import CodeAct",
             "ca = CodeAct()",
-            f"exec(compile({code!r}, '<codeact>', 'exec'))",
+            "exec(compile(sys.stdin.read(), '<codeact>', 'exec'))",
         ]
     )
 
@@ -169,6 +258,7 @@ def codeact(code: str) -> dict[str, Any]:
         [str(interp), "-c", bootstrap],
         cwd=root,
         env=env,
+        input=source,
         capture_output=True,
         text=True,
         encoding="utf-8",

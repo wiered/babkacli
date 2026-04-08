@@ -65,6 +65,25 @@ def test_codeact_read_and_write_round_trip(workspace):
     }
 
 
+def test_codeact_readfiles_reads_multiple(workspace):
+    files = CodeAct().files
+    files.write("a.txt", "one")
+    files.write("sub/b.txt", "two")
+
+    out = files.readfiles(["a.txt", "sub/b.txt"])
+    assert out == {
+        "files": [
+            {"path": "a.txt", "content": "one"},
+            {"path": str(Path("sub") / "b.txt"), "content": "two"},
+        ],
+    }
+
+
+def test_codeact_readfiles_rejects_empty_paths():
+    with pytest.raises(CodeActFilesError, match="non-empty"):
+        CodeAct().files.readfiles([])
+
+
 def test_codeact_create_file_and_directory(workspace):
     files = CodeAct().files
 

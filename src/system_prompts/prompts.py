@@ -17,6 +17,7 @@ LS_PROMPT = dedent(
     - Input JSON:
       {"command":"ls","path":"."}
     - `path` is optional. When omitted, use the current working directory.
+    - Listings are unfiltered: mentally down-rank virtual environments and cache dirs (see global rules) when choosing what to inspect next.
     """
 ).strip()
 
@@ -104,18 +105,46 @@ DONE_PROMPT = dedent(
 
 CODEACT_PROMPT = dedent(
     """
-    codeact:
-    - Python in workspace; `CodeAct` and `ca` (default instance) in scope (do not import). Stdout/stderr returned; use `print` when useful.
-    - Input (pick one): `{"command":"codeact","code_lines":["line1","line2"]}` — preferred for multiline; each array element is one source line (no \\n-in-string escaping).
-    - Or `{"command":"codeact","code":"single line or use \\n for newlines"}` for short snippets only.
-    - Required: only `ca.files.*` and `ca.search.*` — `CodeAct` has `.files` and `.search` only; never `ca.ls`, `ca.read`, or other methods on `ca` itself.
-    - Files — use `ca.files.ls`, `ca.files.read`, `ca.files.write`, `ca.files.create`, `ca.files.delete`:
-      ls(path, ignore=None); read(path); write(path, content); create(path, content="", is_directory=False); delete(path).
-      Returns dicts: read→["content"]; ls→["entries"] as [{name,path,type}]; write/create/delete→status fields.
-      Examples: `ca.files.ls(".")`, `ca.files.read("README.md")`.
-    - Search — use `ca.search.search`, `ca.search.findfiles`, `ca.search.readfolder`:
-      search(pattern, path=".", max_matches=500, max_file_bytes=...); findfiles(pattern, path="."); readfolder(path=".", max_depth=8, max_entries=400).
-    - CodeActFilesError | CodeActSearchError on invalid/unsafe paths.
+    codeact (CodeAct — Python as the action to the environment):
+    - Transport: JSON is only the envelope (`command` + `code_lines` or `code`). The payload is a real Python program, not one rigid tool call per micro-step.
+
+    Always follow this loop (explicit multi-turn refinement):
+    (1) Understand the user task.
+    (2) Plan what the program should do (which paths, reads, branches).
+    (3) Emit `codeact` with that program.
+    (4) Observe the tool result: `returncode`, `stdout`, `stderr` (tracebacks land in `stderr`).
+    (5) If execution failed, output is wrong, or the task is still incomplete → revise the program and run again; do **not** resend the same failing code unchanged.
+
+    Self-debug (core CodeAct behavior):
+    - If `returncode != 0` or `stderr` contains a traceback/error: read the message, fix the **root cause** (wrong API, wrong `type` check, path is a directory, etc.), then re-run corrected code — do not paper over symptoms.
+    - Use errors as ground truth: adjust logic instead of repeating guesses.
+
+    Prefer one rich program per turn:
+    - Use loops, conditions, and variables to batch work (e.g. walk `ls` results, aggregate dicts) instead of issuing many separate `codeact` turns that each do one trivial line — that is the advantage over JSON tool-chains.
+
+    Explore vs execute:
+    - **Explore** when the layout is unknown: `ca.files.ls` (use `ignore` for `.venv`, `__pycache__`, `node_modules`, tool caches, etc., per global rules), `ca.search.readfolder`, or `ca.search.findfiles` before assuming paths.
+    - **Execute** when you know what to read/transform: then `read`, search, writes, etc. Avoid blind `read` of names you have not classified as files.
+
+    Anti-patterns (never):
+    - Do not invent file contents or layout — read or list first.
+    - Do not hardcode paths without confirming they exist (via `ls` / `readfolder` / try/except).
+    - Do not call non-existent `ca.*` methods — only `ca.files.*` and `ca.search.*` as documented below.
+    - Do not `import ca` or `from ca.files import ...` — `ca` is **not** a Python package; it is a variable already injected into your program. Use only `ca.files.ls(...)`, `ca.search.readfolder(...)`, etc.
+    - Do not iterate the return value of `ls` as if it were a list of entries — it is a dict; use `ca.files.ls(path)["entries"]` (and each item has `name`, `path`, `type`).
+    - Do not arbitrarily truncate content (e.g. `text[:500]`, “first N files only”) unless the **user** explicitly asked for a short preview or summary; otherwise read what you need or use `readfolder` for a structured overview.
+
+    Output contract:
+    - Always make the final outcome obvious in `stdout`: clear headings, labeled sections, or `print(json.dumps(..., ensure_ascii=False, indent=2))` when structure matters.
+    - Use `print` for what the next turn (or user) must see; top-level bare expressions are also auto-printed as `repr`.
+
+    Input: `{"command":"codeact","code_lines":["line1",...]}` (preferred; one array element = one source line) or `{"command":"codeact","code":"..."}` for short snippets.
+
+    In scope: `ca` = `CodeAct()` (already created and bound — never import it). Workspace I/O only through `ca.files` and `ca.search` — not `ca.ls` / `ca.read` on `ca` itself. `cwd` is the workspace root; `sys.path` includes the repo root; stdlib allowed.
+
+    Files — `ca.files.ls(path, ignore=None)`, `read(path)`, `readfiles(paths)` (non-empty list; returns `{"files": [{path, content}, ...]}` like the JSON command), `write(path, content)`, `create(path, content="", is_directory=False)`, `delete(path)`. **`read` returns a dict, not a string** — file body is only `ca.files.read(p)["content"]`; for `readfiles`, use each item’s `"content"` (or a comprehension over `["files"]`). `ls`→`entries` with `{name, path, type}` where **`type` is only `"dir"` or `"file"`** (use `e["type"] == "dir"`, never `"directory"`). write/create/delete→status fields. `CodeActFilesError` on bad paths.
+
+    Search — `ca.search.search(pattern, path=".", max_matches=500, max_file_bytes=...)`, `findfiles(pattern, path=".")`, `readfolder(path=".", max_depth=8, max_entries=400)`. `CodeActSearchError` on invalid input/paths.
     """
 ).strip()
 
@@ -173,6 +202,7 @@ SYSTEM_PROMPT_TEMPLATE = dedent(
     - Use `done` only when the task is fully completed and verified if needed.
     - Maintain an internal plan of actions and update it after each step.
     - Avoid re-reading files unless necessary.
+    - When exploring or summarizing the project, treat virtual environments and caches as noise unless the user explicitly asks about them: e.g. `.venv`, `venv`, `env` (venv-style dirs), `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `node_modules`, `.tox`, `dist`, `build`, `.eggs`. Do not edit files inside those trees for normal tasks. With `codeact`, use `ca.files.ls(path, ignore=[...])` to omit directory names you are skipping.
 
     {opening_instruction}
 
