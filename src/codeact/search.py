@@ -1,78 +1,28 @@
 from __future__ import annotations
 
-import fnmatch
-import os
 import re
 from pathlib import Path
 from typing import Any
+
+from ..toolcall.errors import CommandExecutionError
+from ..utils.filesystem import (
+    findfiles_path_matches,
+    is_probably_binary,
+    iter_files_under,
+    should_skip_dir,
+)
+from ..utils.workspace import resolve_within_workspace, workspace_root
 
 
 class CodeActSearchError(RuntimeError):
     """Raised when a CodeAct search operation cannot be executed safely."""
 
 
-_DEFAULT_SKIP_DIRS = frozenset(
-    {
-        ".git",
-        ".hg",
-        ".svn",
-        "__pycache__",
-        ".venv",
-        "venv",
-        "node_modules",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".tox",
-        "dist",
-        "build",
-        ".eggs",
-    }
-)
-
-
-def _skip_dir(name: str) -> bool:
-    if name in _DEFAULT_SKIP_DIRS:
-        return True
-    return name.endswith(".egg-info")
-
-
-def _workspace_root() -> Path:
-    return Path.cwd().resolve()
-
-
 def _resolve(path: str | Path) -> Path:
-    root = _workspace_root()
-    resolved = (root / Path(path)).resolve()
-    if root not in resolved.parents and resolved != root:
-        raise CodeActSearchError(f"Path escapes workspace root: {path}")
-    return resolved
-
-
-def _is_probably_binary(sample: bytes) -> bool:
-    if not sample:
-        return False
-    if b"\x00" in sample[:8192]:
-        return True
-    return False
-
-
-def _walk_files(root: Path) -> list[Path]:
-    out: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if not _skip_dir(d)]
-        for name in filenames:
-            out.append(Path(dirpath) / name)
-    return out
-
-
-def _findfiles_match(relpath: Path, pattern: str) -> bool:
-    posix = relpath.as_posix()
-    glob_chars = frozenset("*?[]")
-    if any(c in pattern for c in glob_chars):
-        if "/" in pattern or pattern.startswith("**"):
-            return fnmatch.fnmatch(posix, pattern)
-        return fnmatch.fnmatch(relpath.name, pattern)
-    return pattern in relpath.name
+    try:
+        return resolve_within_workspace(path)
+    except CommandExecutionError as exc:
+        raise CodeActSearchError(str(exc)) from exc
 
 
 class CodeActSearch:
@@ -103,11 +53,11 @@ class CodeActSearch:
         if not start.is_dir():
             raise CodeActSearchError(f"Path is not a directory: {path}")
 
-        root = _workspace_root()
+        root = workspace_root()
         matches: list[dict[str, Any]] = []
         truncated = False
 
-        for file_path in _walk_files(start):
+        for file_path in iter_files_under(start):
             if truncated:
                 break
             try:
@@ -120,7 +70,7 @@ class CodeActSearch:
                 continue
             if len(raw) > max_file_bytes:
                 continue
-            if _is_probably_binary(raw):
+            if is_probably_binary(raw):
                 continue
             try:
                 text = raw.decode("utf-8")
@@ -166,15 +116,15 @@ class CodeActSearch:
         if not start.is_dir():
             raise CodeActSearchError(f"Path is not a directory: {path}")
 
-        root = _workspace_root()
+        root = workspace_root()
         files: list[str] = []
 
-        for file_path in _walk_files(start):
+        for file_path in iter_files_under(start):
             try:
                 rel = file_path.resolve().relative_to(root)
             except ValueError:
                 continue
-            if _findfiles_match(rel, pattern):
+            if findfiles_path_matches(rel, pattern):
                 files.append(rel.as_posix())
 
         files.sort()
@@ -207,7 +157,7 @@ class CodeActSearch:
         if not target.is_dir():
             raise CodeActSearchError(f"Path is not a directory: {path}")
 
-        root = _workspace_root()
+        root = workspace_root()
         rel_root = target.relative_to(root)
         count = 0
         truncated = False
@@ -247,7 +197,7 @@ class CodeActSearch:
                 return node
 
             for entry in entries:
-                if entry.is_dir() and _skip_dir(entry.name):
+                if entry.is_dir() and should_skip_dir(entry.name):
                     continue
                 if count >= max_entries:
                     truncated = True

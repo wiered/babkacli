@@ -4,21 +4,19 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from ..toolcall.errors import CommandExecutionError
+from ..utils.workspace import resolve_within_workspace, workspace_root
+
 
 class CodeActFilesError(RuntimeError):
     """Raised when a CodeAct file operation cannot be executed safely."""
 
 
-def _workspace_root() -> Path:
-    return Path.cwd().resolve()
-
-
 def _resolve(path: str | Path) -> Path:
-    root = _workspace_root()
-    resolved = (root / Path(path)).resolve()
-    if root not in resolved.parents and resolved != root:
-        raise CodeActFilesError(f"Path escapes workspace root: {path}")
-    return resolved
+    try:
+        return resolve_within_workspace(path)
+    except CommandExecutionError as exc:
+        raise CodeActFilesError(str(exc)) from exc
 
 
 class CodeActFiles:
@@ -34,7 +32,7 @@ class CodeActFiles:
         if not target.is_dir():
             raise CodeActFilesError(f"Path is not a directory: {path}")
 
-        root = _workspace_root()
+        root = workspace_root()
         ignore_set = frozenset(ignore) if ignore else frozenset()
 
         entries: list[dict[str, Any]] = []
@@ -57,7 +55,7 @@ class CodeActFiles:
             raise CodeActFilesError(f"File does not exist: {path}")
         if not target.is_file():
             raise CodeActFilesError(f"Path is not a file: {path}")
-        root = _workspace_root()
+        root = workspace_root()
         return {
             "path": str(target.relative_to(root)),
             "content": target.read_text(encoding="utf-8"),
@@ -68,7 +66,7 @@ class CodeActFiles:
         target = _resolve(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        root = _workspace_root()
+        root = workspace_root()
         return {
             "path": str(target.relative_to(root)),
             "written": True,
@@ -92,7 +90,7 @@ class CodeActFiles:
             raise CodeActFilesError("Cannot create a directory with non-empty content.")
 
         target = _resolve(path)
-        root = _workspace_root()
+        root = workspace_root()
 
         if is_directory:
             target.mkdir(parents=True, exist_ok=True)
@@ -109,7 +107,7 @@ class CodeActFiles:
     def delete(self, path: str) -> dict[str, Any]:
         """Remove a single file, symlink, or directory tree inside the workspace."""
         target = _resolve(path)
-        root = _workspace_root()
+        root = workspace_root()
         if target == root:
             raise CodeActFilesError("Cannot delete workspace root.")
 
