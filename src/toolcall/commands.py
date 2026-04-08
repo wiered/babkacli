@@ -137,9 +137,10 @@ def _python_interpreter() -> Path:
     """Return the preferred Python interpreter for workspace scripts."""
 
     root = workspace_root()
-    venv_python = root / ".venv" / "Scripts" / "python.exe"
-    if venv_python.exists():
-        return venv_python
+    for parent in [root, *root.parents]:
+        candidate = parent / ".venv" / "Scripts" / "python.exe"
+        if candidate.exists():
+            return candidate
     return Path(sys.executable)
 
 
