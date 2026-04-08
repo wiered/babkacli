@@ -3,7 +3,6 @@ import os
 from importlib import resources
 from typing import Any
 from pathlib import Path
-from dataclasses import dataclass
 
 from PySide6.QtGui import QFont, QFontDatabase
 from azure.ai.inference import ChatCompletionsClient
@@ -27,24 +26,6 @@ ALLOWED_COMMANDS_BY_MODE: dict[str, set[str]] = {
         "writefile",
     },
 }
-
-
-@dataclass(slots=True)
-class ChatEvent:
-    """A rendered item in the agent chat history."""
-
-    kind: str
-    title: str = ""
-    body: str = ""
-    tone: str = "meta"
-    step: int | None = None
-    total: int | None = None
-    block_id: str = ""
-    collapsible: bool = False
-    group_id: str = ""
-    usage_prompt_tokens: int | None = None
-    usage_completion_tokens: int | None = None
-    usage_total_tokens: int | None = None
 
 
 def _get_token() -> str:

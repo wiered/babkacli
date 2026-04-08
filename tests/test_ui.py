@@ -403,7 +403,7 @@ def test_chat_webview_exposes_unified_api(tmp_path):
     app = QApplication.instance() or QApplication([])
     assert app is not None
 
-    from src.ui.chat_webview import ChatWebView
+    from src.web_chat.chat_webview import ChatWebView
 
     view = ChatWebView()
     try:
@@ -421,7 +421,7 @@ def test_agent_window_chat_view_is_chat_webview(tmp_path):
     app = QApplication.instance() or QApplication([])
     assert app is not None
 
-    from src.ui.chat_webview import ChatWebView
+    from src.web_chat.chat_webview import ChatWebView
 
     from dotenv import load_dotenv
     load_dotenv()

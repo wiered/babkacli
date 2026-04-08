@@ -50,11 +50,12 @@ if __package__ in {None, ""}:
     from src.ui.python_highlighter import PythonHighlighter
     from src.ui.title_bar import build_app_icon, TitleBar
     from src.ui.native_chrome_win32 import LowLevelNativeChromeMixin
-    from src.ui.ui_utils import build_messages, build_nerd_font, ChatEvent
+    from src.ui.ui_utils import build_messages, build_nerd_font
+    from src.web_chat.chat_event import ChatEvent
     from src.ui.style import STYLE_SHEET
-    from src.ui.html_generator import render_chat_history, get_copy_block
-    from src.ui.chat_webview import ChatWebView
-    from src.ui.chat_storage import (
+    from src.web_chat.html_generator import render_chat_history, get_copy_block
+    from src.web_chat.chat_webview import ChatWebView
+    from src.web_chat.chat_storage import (
         chat_file_path,
         fresh_session_state,
         list_archived_chats,
@@ -75,11 +76,12 @@ else:
     from ..ui.python_highlighter import PythonHighlighter
     from ..ui.title_bar import build_app_icon, TitleBar
     from ..ui.native_chrome_win32 import LowLevelNativeChromeMixin
-    from ..ui.ui_utils import build_messages, build_nerd_font, ChatEvent
+    from ..ui.ui_utils import build_messages, build_nerd_font
+    from ..web_chat.chat_event import ChatEvent
     from ..ui.style import STYLE_SHEET
-    from ..ui.html_generator import render_chat_history, get_copy_block
-    from ..ui.chat_webview import ChatWebView
-    from ..ui.chat_storage import (
+    from ..web_chat.html_generator import render_chat_history, get_copy_block
+    from ..web_chat.chat_webview import ChatWebView
+    from ..web_chat.chat_storage import (
         chat_file_path,
         fresh_session_state,
         list_archived_chats,

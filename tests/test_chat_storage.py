@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from azure.ai.inference.models import UserMessage
 
-from src.ui.chat_storage import (
+from src.web_chat.chat_storage import (
     fresh_session_state,
     load_chat_session,
     save_chat_session,

@@ -12,7 +12,8 @@ from typing import Any
 
 from azure.ai.inference.models import AssistantMessage, SystemMessage, UserMessage
 
-from .ui_utils import ChatEvent, build_messages, normalize_mode
+from .chat_event import ChatEvent
+from ..ui.ui_utils import build_messages, normalize_mode
 
 FORMAT_VERSION = 1
 CHATS_SUBDIR = Path(".babka") / "chats"

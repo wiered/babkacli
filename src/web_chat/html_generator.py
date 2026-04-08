@@ -5,9 +5,11 @@ from pathlib import Path
 if __package__ in {None, ""}:
     import sys
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from src.ui.ui_utils import ChatEvent, monospace_font_stack_css
+    from src.web_chat.chat_event import ChatEvent
+    from src.ui.ui_utils import monospace_font_stack_css
 else:
-    from ..ui.ui_utils import ChatEvent, monospace_font_stack_css
+    from .chat_event import ChatEvent
+    from ..ui.ui_utils import monospace_font_stack_css
 
 
 # ── Copy store (populated each render, read by clipboard handler) ──────────────
