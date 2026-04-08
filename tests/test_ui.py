@@ -185,7 +185,7 @@ def test_build_messages_uses_selected_mode_prompt():
 
     assert len(messages) == 1
     assert isinstance(messages[0], SystemMessage)
-    assert "режиме ask" in messages[0].content
+    assert "in ask mode" in messages[0].content
     assert "writefile:" not in messages[0].content
 
 
