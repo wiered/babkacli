@@ -211,6 +211,16 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Cursor
+.cursor/
+.cursor/*
+.cursorignore
+
+# Ignore VSCode project files
+.vscode/
+.vscode/*
+
+
 # my
 test_project/
 generated_titlebar_icons/
