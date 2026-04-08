@@ -9,11 +9,9 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from ..toolcall.json_parser import ParsedAgentCommand
-
-
-class CommandExecutionError(RuntimeError):
-    """Raised when a command cannot be executed safely."""
+from ..utils.workspace import resolve_within_workspace, workspace_root
+from .errors import CommandExecutionError
+from .json_parser import ParsedAgentCommand
 
 
 @dataclass(slots=True)
@@ -22,18 +20,6 @@ class CommandOutcome:
 
     command: str
     data: dict[str, Any]
-
-
-def workspace_root() -> Path:
-    return Path.cwd().resolve()
-
-
-def resolve_within_workspace(path: str | Path) -> Path:
-    root = workspace_root()
-    resolved = (root / Path(path)).resolve()
-    if root not in resolved.parents and resolved != root:
-        raise CommandExecutionError(f"Path escapes workspace root: {path}")
-    return resolved
 
 
 def ls(path: str = ".") -> dict[str, Any]:
@@ -280,7 +266,7 @@ def dispatch_command(command: ParsedAgentCommand) -> CommandOutcome:
 def parse_and_dispatch_agent_response(raw_response: str) -> CommandOutcome:
     """Parse a raw agent response and execute the referenced command."""
 
-    from ..toolcall.json_parser import parse_agent_response
+    from .json_parser import parse_agent_response
 
     parsed = parse_agent_response(raw_response, allowed_commands=set(AVAILABLE_COMMANDS))
     return dispatch_command(parsed)
