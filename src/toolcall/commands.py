@@ -145,7 +145,7 @@ def _python_interpreter() -> Path:
 
 
 def codeact(code: str) -> dict[str, Any]:
-    """Run Python source in the workspace; ``CodeAct`` is pre-imported in the child process."""
+    """Run Python source in the workspace; ``CodeAct`` and ``ca`` (a default instance) are in scope."""
 
     if not isinstance(code, str) or not code.strip():
         raise CommandExecutionError("'code' must be a non-empty string.")
@@ -157,6 +157,7 @@ def codeact(code: str) -> dict[str, Any]:
             "import sys",
             f"sys.path.insert(0, {str(root)!r})",
             "from src.codeact.codeact import CodeAct",
+            "ca = CodeAct()",
             f"exec(compile({code!r}, '<codeact>', 'exec'))",
         ]
     )

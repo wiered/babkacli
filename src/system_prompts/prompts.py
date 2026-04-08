@@ -104,7 +104,7 @@ DONE_PROMPT = dedent(
 CODEACT_PROMPT = dedent(
     """
     codeact:
-    - Python in workspace; `CodeAct` in scope (do not import). Stdout/stderr returned; use `print` when useful.
+    - Python in workspace; `CodeAct` and `ca` (default instance) in scope (do not import). Stdout/stderr returned; use `print` when useful.
     - Input: {"command":"codeact","code":"..."} — non-empty source; multiline via \\n in JSON.
     - ca.files: ls(path, ignore=None); read(path); write(path, content); create(path, content="", is_directory=False); delete(path)
       Returns dicts: read→["content"]; ls→["entries"] as [{name,path,type}]; write/create/delete→status fields.
