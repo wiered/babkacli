@@ -1,8 +1,13 @@
-"""Persist agent chat sessions under `<workspace>/.babka/chats/`."""
+"""Persist agent chat sessions under ``~/.babka/chats/<workspace_key>/`` (per workspace).
+
+Override the root with env ``BABKA_HOME`` (defaults to ``Path.home() / ".babka"``).
+"""
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import shutil
 import uuid
 from dataclasses import asdict
@@ -16,13 +21,22 @@ from .chat_event import ChatEvent
 from ..ui.ui_utils import build_messages, normalize_mode
 
 FORMAT_VERSION = 1
-CHATS_SUBDIR = Path(".babka") / "chats"
-CHATS_ARCHIVE_SUBDIR = CHATS_SUBDIR / "archive"
-LAST_CHAT_FILE = Path(".babka") / "last_chat.json"
+
+
+def babka_user_data_root() -> Path:
+    raw = os.environ.get("BABKA_HOME", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return (Path.home() / ".babka").resolve()
+
+
+def _workspace_key(workspace: Path) -> str:
+    p = workspace.resolve().as_posix().encode("utf-8")
+    return hashlib.sha256(p).hexdigest()[:16]
 
 
 def chats_dir(workspace: Path) -> Path:
-    return workspace / CHATS_SUBDIR
+    return babka_user_data_root() / "chats" / _workspace_key(workspace)
 
 
 def _utc_now_iso() -> str:
@@ -46,7 +60,7 @@ def archived_chat_file_path(workspace: Path, chat_id: str) -> Path:
     safe = chat_id.replace("/", "").replace("\\", "").replace("..", "")
     if not safe:
         raise ValueError("Invalid chat id")
-    root = workspace / CHATS_ARCHIVE_SUBDIR
+    root = chats_dir(workspace) / "archive"
     root.mkdir(parents=True, exist_ok=True)
     return root / f"{safe}.json"
 
@@ -88,9 +102,9 @@ def list_saved_chats(workspace: Path) -> list[tuple[str, float, str]]:
 
 
 def list_archived_chats(workspace: Path) -> list[tuple[str, float, str]]:
-    """Return `(chat_id, mtime, title)` for chats in `.babka/chats/archive/`."""
+    """Return `(chat_id, mtime, title)` for chats in the archive subfolder."""
 
-    root = workspace / CHATS_ARCHIVE_SUBDIR
+    root = chats_dir(workspace) / "archive"
     if not root.is_dir():
         return []
     rows: list[tuple[str, float, str]] = []
@@ -135,7 +149,7 @@ def move_chat_from_archive(workspace: Path, chat_id: str) -> None:
 
 
 def read_last_chat_id(workspace: Path) -> str | None:
-    path = workspace / LAST_CHAT_FILE
+    path = chats_dir(workspace) / "last_chat.json"
     if not path.is_file():
         return None
     try:
@@ -149,7 +163,7 @@ def read_last_chat_id(workspace: Path) -> str | None:
 
 
 def write_last_chat_id(workspace: Path, chat_id: str) -> None:
-    path = workspace / LAST_CHAT_FILE
+    path = chats_dir(workspace) / "last_chat.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({"chat_id": chat_id}, ensure_ascii=False, indent=2) + "\n",
@@ -258,7 +272,7 @@ def save_chat_session(
     usage_totals: dict[str, int] | None = None,
     stored_in_archive: bool = False,
 ) -> None:
-    """Write the full chat state to `.babka/chats/<id>.json` (or under ``chats/archive/``)."""
+    """Write the full chat state under the user ``.babka`` chats tree (active or archive)."""
     mode_norm = normalize_mode(mode)
     t = (title or "").strip() or derive_title(messages, chat_events)
     path = archived_chat_file_path(workspace, chat_id) if stored_in_archive else chat_file_path(workspace, chat_id)

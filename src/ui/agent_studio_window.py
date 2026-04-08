@@ -295,7 +295,9 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._archive_chat_button = QPushButton("В архив")
         self._archive_chat_button.setObjectName("inlineButton")
         self._archive_chat_button.setFixedHeight(26)
-        self._archive_chat_button.setToolTip("Убрать текущий чат в архив (файл в .babka/chats/archive/)")
+        self._archive_chat_button.setToolTip(
+            "Убрать текущий чат в архив (файл в ~/.babka/chats/…/archive/)"
+        )
         self._archive_chat_button.clicked.connect(self._archive_current_chat)
 
         self._browse_archive_button = QPushButton("Архив…")

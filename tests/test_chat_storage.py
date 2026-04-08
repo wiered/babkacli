@@ -1,4 +1,4 @@
-"""Tests for `.babka/chats` persistence."""
+"""Tests for user-dir ``.babka/chats`` persistence (``BABKA_HOME`` in tests)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ from src.web_chat.chat_storage import (
 )
 
 
-def test_chat_roundtrip_preserves_messages_and_events(tmp_path):
+def test_chat_roundtrip_preserves_messages_and_events(tmp_path, monkeypatch):
+    monkeypatch.setenv("BABKA_HOME", str(tmp_path / "babka"))
     s = fresh_session_state("agent")
     s["chat_events"] = []  # start clean
     s["messages"].append(UserMessage("hello"))
