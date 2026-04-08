@@ -84,21 +84,11 @@ RUNPY_PROMPT = dedent(
 DONE_PROMPT = dedent(
     """
     done:
-    - Use only for the final response to the user.
+    - Use only for the final user response.
     - Input JSON:
-      {"command":"done","result":"final answer for the user"}
-    - `result` must contain the final human-readable answer in markdown format.
-    - The `result` field supports markdown formatting for the assistant's response.
-    - The `result` supports the following elements:
-      - `code` — inline code with style
-      - ```...``` — code blocks
-      - **bold** / __bold__ — bold text
-      - *italic* / _italic_ — italic text
-      - [text](url) — links
-      - #, ##, ### — headings of different sizes
-      - -, 1. — lists
-      - --- — horizontal rules
-      - blank lines — paragraph spacing
+      {"command":"done","result":"final answer to the user"}
+    - In the `result` field, write the final response in natural language using markdown (headings, lists, emphasis, links, code).
+
     """
 ).strip()
 
@@ -114,41 +104,12 @@ DONE_PROMPT = dedent(
 CODEACT_PROMPT = dedent(
     """
     codeact:
-    - You can also delegate part of the task to codeact using a hybrid approach with codeact + tool calling.
-    - If you think that the task can be better accomplished using `codeact`, use it.
-    - Use to execute Python in the workspace. The `CodeAct` class is already available (do not import it).
-    - Input JSON:
-      {"command":"codeact","code":"ca = CodeAct()\\nprint(ca.files.ls('.')['path'])"}
-    - `code` must be a non-empty Python source string (can be multiple lines via \\n in JSON).
-    - Prefer this when you need to combine several `CodeActFiles` steps in one turn (list, read, write, create, delete).
-    - Stdout/stderr and the process return code are returned to you; use `print(...)` to pass data between steps.
-
-    CodeAct/CodeActFiles documentation:
-    codeact provides a user-facing API for workspace file management via the `CodeAct` class.
-    - `CodeAct` serves as a high-level interface, exposing `.files` and `.search` properties.
-    - The `.files` property is an instance of `CodeActFiles`.
-    - The `.search` property is an instance of `CodeActSearch`.
-
-    files implements the logic for safe file and directory operations within a controlled workspace.
-    - `CodeActFiles` supports:
-        - `ls(path, ignore=None)`: List files/folders in a directory, optionally ignoring some.
-        - `read(path)`: Read the contents of a single text file.
-        - `write(path, content)`: Overwrite or create a text file.
-        - `create(path, content="", is_directory=False)`: Create a file or directory.
-        - `delete(path)`: Remove a file, symlink, or directory (recursively).
-    - Each method returns a dict (not a bare string). For string operations (e.g. `.replace`, `.split`), use the right field:
-        - After `read(...)`, use `["content"]` for file text; the whole return value is `{"path", "content"}`.
-        - After `ls(...)`, use `["entries"]` for the list; the whole value is `{"path", "entries"}`.
-        - Each `entries` item is an object `{"name": str, "path": str, "type": "file"|"dir"}` — use `entry["path"]` or `entry["name"]` for string checks (e.g. `.endswith`); do not treat `entry` itself as a filename string.
-        - `write` / `create` / `delete` return small status dicts (`written`, `created`, `deleted`, paths, byte counts).
-    - Internal logic ensures every operation stays within the workspace root for safety.
-    - Raises `CodeActFilesError` on unsafe/invalid operations.
-
-    `CodeActSearch` (via `ca.search`):
-    - `search(pattern, path=".", max_matches=500, max_file_bytes=...)`: regex grep over text files under `path`; returns `{"pattern","path","matches":[{"path","line","text"},...],"truncated"}`.
-    - `findfiles(pattern, path=".")`: find files by name (substring, or `fnmatch` if pattern contains `*?[]`; patterns with `/` or `**` match the relative path).
-    - `readfolder(path=".", max_depth=8, max_entries=400)`: nested tree `{"path","max_depth","tree":{name,type,path,children?},"truncated"}` for structure overview.
-    - Raises `CodeActSearchError` on invalid input or path escape.
+    - Python in workspace; `CodeAct` in scope (do not import). Stdout/stderr returned; use `print` when useful.
+    - Input: {"command":"codeact","code":"..."} — non-empty source; multiline via \\n in JSON.
+    - ca.files: ls(path, ignore=None); read(path); write(path, content); create(path, content="", is_directory=False); delete(path)
+      Returns dicts: read→["content"]; ls→["entries"] as [{name,path,type}]; write/create/delete→status fields.
+    - ca.search: search(pattern, path=".", max_matches=500, max_file_bytes=...); findfiles(pattern, path="."); readfolder(path=".", max_depth=8, max_entries=400)
+    - CodeActFilesError | CodeActSearchError on invalid/unsafe paths.
     """
 ).strip()
 
@@ -177,8 +138,18 @@ SYSTEM_PROMPT_TEMPLATE = dedent(
     - If the task is complete, use the `done` command and provide the result to the user in `result`.
     - Do not invent commands outside of the list.
     - If `writefile` is not available in the current mode, do not use it.
-    - Start with understanding the task and the project context.
-    - Use codeact to scan the workspace and get the context of the project.
+    - Before executing any command, internally decide the next step based on current knowledge.
+    - Do not execute commands blindly; prefer minimal necessary actions.
+    - Use internal reasoning to decide next steps, but never include it in the output.
+    - If a command fails, analyze the error and try an alternative approach.
+    - Do not repeat the same failing command without changes.
+    - Avoid repeating the same command with identical parameters.
+    - If no progress is made after several steps, reassess the strategy.
+    - Use `done` only when the task is fully completed and verified if needed.
+    - Maintain an internal plan of actions and update it after each step.
+    - Avoid re-reading files unless necessary.
+
+    Start by inspecting the project structure using codeact.
 
     You have the following commands:
 
@@ -217,3 +188,6 @@ def build_system_prompt_for_mode(mode: str) -> str:
 
     normalized_mode = mode.strip().lower()
     return build_system_prompt(mode=normalized_mode)
+
+if __name__ == "__main__":
+    print(build_system_prompt_for_mode("agent"))
