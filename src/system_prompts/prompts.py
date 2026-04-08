@@ -125,8 +125,9 @@ CODEACT_PROMPT = dedent(
 
     CodeAct/CodeActFiles documentation:
     codeact provides a user-facing API for workspace file management via the `CodeAct` class.
-    - `CodeAct` serves as a high-level interface, exposing a `.files` property.
+    - `CodeAct` serves as a high-level interface, exposing `.files` and `.search` properties.
     - The `.files` property is an instance of `CodeActFiles`.
+    - The `.search` property is an instance of `CodeActSearch`.
 
     files implements the logic for safe file and directory operations within a controlled workspace.
     - `CodeActFiles` supports:
@@ -142,6 +143,12 @@ CODEACT_PROMPT = dedent(
         - `write` / `create` / `delete` return small status dicts (`written`, `created`, `deleted`, paths, byte counts).
     - Internal logic ensures every operation stays within the workspace root for safety.
     - Raises `CodeActFilesError` on unsafe/invalid operations.
+
+    `CodeActSearch` (via `ca.search`):
+    - `search(pattern, path=".", max_matches=500, max_file_bytes=...)`: regex grep over text files under `path`; returns `{"pattern","path","matches":[{"path","line","text"},...],"truncated"}`.
+    - `findfiles(pattern, path=".")`: find files by name (substring, or `fnmatch` if pattern contains `*?[]`; patterns with `/` or `**` match the relative path).
+    - `readfolder(path=".", max_depth=8, max_entries=400)`: nested tree `{"path","max_depth","tree":{name,type,path,children?},"truncated"}` for structure overview.
+    - Raises `CodeActSearchError` on invalid input or path escape.
     """
 ).strip()
 
