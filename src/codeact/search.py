@@ -4,25 +4,19 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..toolcall.errors import CommandExecutionError
 from ..utils.filesystem import (
     findfiles_path_matches,
     is_probably_binary,
     iter_files_under,
     should_skip_dir,
 )
-from ..utils.workspace import resolve_within_workspace, workspace_root
+from ..utils.workspace import workspace_root
+from .utils import resolve as resolve_universal
+from .errors import CodeActSearchError
 
 
-class CodeActSearchError(RuntimeError):
-    """Raised when a CodeAct search operation cannot be executed safely."""
-
-
-def _resolve(path: str | Path) -> Path:
-    try:
-        return resolve_within_workspace(path)
-    except CommandExecutionError as exc:
-        raise CodeActSearchError(str(exc)) from exc
+def resolve(path: str | Path) -> Path:
+    return resolve_universal(path, CodeActSearchError)
 
 
 class CodeActSearch:
@@ -47,7 +41,7 @@ class CodeActSearch:
         except re.error as exc:
             raise CodeActSearchError(f"Invalid regular expression: {exc}") from exc
 
-        start = _resolve(path)
+        start = resolve(path)
         if not start.exists():
             raise CodeActSearchError(f"Path does not exist: {path}")
         if not start.is_dir():
@@ -110,7 +104,7 @@ class CodeActSearch:
         if not isinstance(pattern, str) or not pattern.strip():
             raise CodeActSearchError("'pattern' must be a non-empty string.")
 
-        start = _resolve(path)
+        start = resolve(path)
         if not start.exists():
             raise CodeActSearchError(f"Path does not exist: {path}")
         if not start.is_dir():
@@ -151,7 +145,7 @@ class CodeActSearch:
         if max_entries < 1:
             raise CodeActSearchError("max_entries must be at least 1.")
 
-        target = _resolve(path)
+        target = resolve(path)
         if not target.exists():
             raise CodeActSearchError(f"Path does not exist: {path}")
         if not target.is_dir():
