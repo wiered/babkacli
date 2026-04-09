@@ -364,10 +364,10 @@ def render_chat_history(chat_events: list[ChatEvent], collapsed_blocks: set[str]
             collapsed = event.block_id in collapsed_blocks
             arrow = "&rsaquo;" if collapsed else "&#10549;"
             html_parts.append(f"""
-<div class="step-divider" style="margin: 18px 0 14px 0;">
+<div id="chat-block-{html.escape(event.block_id)}" class="step-divider" style="margin: 18px 0 14px 0;">
   <a href="toggle:{html.escape(event.block_id)}"
      style="color:#4a4a52; text-decoration:none; white-space:nowrap; padding:0 4px; cursor:pointer;">
-    {html.escape(event.title)}&nbsp;{arrow}
+    {html.escape(event.title)}&nbsp;<span id="chat-arrow-{html.escape(event.block_id)}">{arrow}</span>
   </a>
 </div>
 """)
@@ -442,16 +442,13 @@ def render_chat_history(chat_events: list[ChatEvent], collapsed_blocks: set[str]
                     f'<a class="tool-run-row" href="toggle:{bid_esc}">'
                     f'<span class="tool-run-label">Запущен</span> '
                     f'<span class="tool-run-cmd">{title_esc}</span>'
-                    f'<span class="tool-run-arrow">&nbsp;{arrow}</span>'
+                    f'<span class="tool-run-arrow" id="chat-arrow-{bid_esc}">&nbsp;{arrow}</span>'
                     f'</a>'
                 )
-                if collapsed:
-                    html_parts.append(f'<div style="margin: 3px 0 2px 0;">{row}</div>\n')
-                else:
-                    html_parts.append(f"""
-<div style="margin: 4px 0 8px 0;">
+                html_parts.append(f"""
+<div id="chat-block-{bid_esc}" style="margin: 4px 0 8px 0;">
   {row}
-  <div class="tool-content">
+  <div id="chat-content-{bid_esc}" class="tool-content" style="{'' if not collapsed else 'display:none;'}">
     <pre>{html.escape(event.body)}</pre>
   </div>
 </div>
@@ -459,39 +456,32 @@ def render_chat_history(chat_events: list[ChatEvent], collapsed_blocks: set[str]
 
             elif event.tone == "error":
                 toggle_icon = "&rsaquo;" if collapsed else "&#10549;"
-                content_html = (
-                    f'<pre style="color: #d49090; margin: 0;">{html.escape(event.body)}</pre>'
-                    if not collapsed
-                    else f'<div class="dim" style="font-style:italic;">{html.escape(event.body[:160])}…</div>'
-                )
+                content_html = f'<pre style="color: #d49090; margin: 0;">{html.escape(event.body)}</pre>'
                 html_parts.append(f"""
-<div class="error-block" style="margin: 6px 0 10px 0;">
+<div id="chat-block-{bid_esc}" class="error-block" style="margin: 6px 0 10px 0;">
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px;">
     <span class="label" style="color: #e05555;">{title_esc}</span>
-    <a class="toggle-link" href="toggle:{bid_esc}">{toggle_icon}</a>
+    <a class="toggle-link" href="toggle:{bid_esc}"><span id="chat-arrow-{bid_esc}">{toggle_icon}</span></a>
   </div>
-  {content_html}
+  <div id="chat-content-{bid_esc}" style="{'' if not collapsed else 'display:none;'}">{content_html}</div>
 </div>
 """)
 
             else:  # assistant / meta blocks
                 toggle_icon = "&rsaquo;" if collapsed else "&#10549;"
-                if collapsed:
-                    content_html = ""
-                else:
-                    content_html = f'<pre style="color: #b0b0b8;">{html.escape(event.body)}</pre>'
+                content_html = f'<pre style="color: #b0b0b8;">{html.escape(event.body)}</pre>'
 
                 label_color = "#4ade80" if event.tone == "assistant" else "#8a8a96"
                 usage_html = _usage_caption_html(event, mono_css=_mono)
                 html_parts.append(f"""
-<div style="margin: 4px 0 10px 0;">
+<div id="chat-block-{bid_esc}" style="margin: 4px 0 10px 0;">
   <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
     <a class="toggle-link" style="color:{label_color}; font-size:10px; font-weight:700;
        letter-spacing:0.08em; text-transform:uppercase;"
-       href="toggle:{bid_esc}">{title_esc}&nbsp;{toggle_icon}</a>
+       href="toggle:{bid_esc}">{title_esc}&nbsp;<span id="chat-arrow-{bid_esc}">{toggle_icon}</span></a>
   </div>
   {usage_html}
-  {content_html}
+  <div id="chat-content-{bid_esc}" style="{'' if not collapsed else 'display:none;'}">{content_html}</div>
 </div>
 """)
 

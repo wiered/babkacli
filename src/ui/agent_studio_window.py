@@ -138,6 +138,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._chat_usage_totals = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         self._turn_prompt_tokens = 0
         self._turn_completion_tokens = 0
+        self._scroll_chat_on_next_load = False
 
         self.setWindowTitle("BabkaCode")
         self.setWindowIcon(build_app_icon())
@@ -598,7 +599,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._mode_selector.setCurrentText(self._mode)
         self._mode_selector.blockSignals(False)
         self._update_chat_placeholder()
-        self._render_chat_history()
+        self._render_chat_history(scroll_to_bottom=True)
         self._update_token_badge()
         self._refresh_archive_buttons()
 
@@ -836,15 +837,19 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         return block_id
 
     def _scroll_chat_to_bottom(self) -> None:
+        if not self._scroll_chat_on_next_load:
+            return
+        self._scroll_chat_on_next_load = False
         self._chat_view.run_js("window.scrollTo(0, document.body.scrollHeight);")
 
-    def _render_chat_history(self) -> None:
+    def _render_chat_history(self, *, scroll_to_bottom: bool = False) -> None:
+        self._scroll_chat_on_next_load = scroll_to_bottom
         html_parts = render_chat_history(self._chat_events, self._collapsed_blocks)
         self._chat_view.set_html("".join(html_parts))
 
     def _append_chat_message(self, role: str, body: str, *, tone: str = "neutral") -> None:
         self._chat_events.append(ChatEvent(kind="message", title=role, body=body, tone=tone))
-        self._render_chat_history()
+        self._render_chat_history(scroll_to_bottom=True)
 
     def _update_chat_placeholder(self) -> None:
         if self._mode == "ask":
@@ -875,7 +880,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
     def _append_step_header(self, step: int, total: int, label: str, *, group_id: str = "") -> None:
         self._chat_events.append(ChatEvent(kind="step", title=label, step=step, total=total, group_id=group_id))
-        self._render_chat_history()
+        self._render_chat_history(scroll_to_bottom=True)
 
     def _append_code_block(
         self,
@@ -910,7 +915,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
             )
         )
         self._collapsed_blocks.add(block_id)
-        self._render_chat_history()
+        self._render_chat_history(scroll_to_bottom=True)
 
     def _handle_chat_anchor_clicked(self, token: str) -> None:
 
@@ -923,11 +928,40 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
         if token.startswith("toggle:"):
             block_id = token[len("toggle:"):]
+            is_group_header = any(
+                e.kind == "group_header" and e.block_id == block_id for e in self._chat_events
+            )
             if block_id in self._collapsed_blocks:
                 self._collapsed_blocks.remove(block_id)
+                collapsed = False
             else:
                 self._collapsed_blocks.add(block_id)
-            self._render_chat_history()
+                collapsed = True
+            if is_group_header:
+                self._render_chat_history()
+                return
+
+            safe_content_id = json.dumps(f"chat-content-{block_id}")
+            safe_arrow_id = json.dumps(f"chat-arrow-{block_id}")
+            arrow = "&rsaquo;" if collapsed else "&#10549;"
+            self._chat_view.run_js(
+                f"""
+                (function() {{
+                    var content = document.getElementById({safe_content_id});
+                    if (content) {{
+                        content.style.display = {"'none'" if collapsed else "''"};
+                    }}
+                    var arrow = document.getElementById({safe_arrow_id});
+                    if (arrow) {{
+                        if (arrow.classList && arrow.classList.contains("tool-run-arrow")) {{
+                            arrow.innerHTML = "&nbsp;{arrow}";
+                        }} else {{
+                            arrow.innerHTML = "{arrow}";
+                        }}
+                    }}
+                }})();
+                """
+            )
 
     def _set_busy(self, busy: bool) -> None:
         self._send_button.setDisabled(busy)
@@ -961,7 +995,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         group_event = ChatEvent(kind="group_header", title="Работает…", block_id=self._work_group_id)
         self._chat_events.append(group_event)
         self._work_group_header = group_event
-        self._render_chat_history()
+        self._render_chat_history(scroll_to_bottom=True)
 
         self._set_status("Thinking...")
         self._set_busy(True)
