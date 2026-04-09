@@ -83,8 +83,11 @@ def main(argv: list[str] | None = None) -> int:
 
     ensure_bundled_jetbrains_nerd_font()
 
-    font = QFont("Segoe UI", 11)
-    app.setFont(font)
+    font = QFont("Segoe UI Variable", 10)
+    if font.exactMatch():
+        app.setFont(font)
+    else:
+        app.setFont(QFont("Segoe UI", 11))
 
     window = AgentStudioWindow(workspace=workspace, model=model, max_steps=max_steps)
     window.show()

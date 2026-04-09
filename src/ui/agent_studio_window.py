@@ -163,7 +163,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
     def _build_ui(self) -> None:
         model_short = self._model.split("/")[-1] if "/" in self._model else self._model
         # Match AI ASSISTANT header row height across all three columns.
-        panel_header_h = 44
+        panel_header_h = 46
 
         # ── File Explorer panel ───────────────────────────────────────────────
         explorer_label = QLabel("  EXPLORER")
@@ -206,12 +206,12 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self.addAction(self._save_action)
 
         self._save_button = QPushButton("Save")
-        self._save_button.setObjectName("inlineButton")
+        self._save_button.setObjectName("editorInlineButton")
         self._save_button.setFixedHeight(26)
         self._save_button.clicked.connect(self._save_current_file)
 
         self._toggle_terminal_button = QPushButton("Terminal")
-        self._toggle_terminal_button.setObjectName("inlineButton")
+        self._toggle_terminal_button.setObjectName("editorInlineButton")
         self._toggle_terminal_button.setFixedHeight(26)
         self._toggle_terminal_button.clicked.connect(self._toggle_terminal)
 
@@ -412,7 +412,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._title_content_gap = QWidget(container)
         self._title_content_gap.setObjectName("titleContentGap")
         self._title_content_gap.setFixedHeight(2)
-        self._title_content_gap.setStyleSheet("background-color: #1a1a1a;")
+        self._title_content_gap.setStyleSheet("background-color: #161618;")
         root.addWidget(self._title_bar, 0)
         root.addWidget(self._title_content_gap, 0)
         root.addWidget(self._splitter, 1)
@@ -434,7 +434,7 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         self._status_bar = QStatusBar(self)
         self._status_bar.addWidget(self._status)
         self._token_status = QLabel("  Чат · токены: —")
-        self._token_status.setObjectName("hintLabel")
+        self._token_status.setObjectName("tokenStatusLabel")
         self._status_bar.addPermanentWidget(self._token_status)
         self.setStatusBar(self._status_bar)
         self._set_status("Ready")

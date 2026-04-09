@@ -34,7 +34,7 @@ class TitleBar(QWidget):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("titleBar")
-        self.setFixedHeight(38)
+        self.setFixedHeight(42)
         self._show_app_identity = show_app_identity
         self._show_window_controls = show_window_controls
 
@@ -50,13 +50,13 @@ class TitleBar(QWidget):
         if not icon_pixmap.isNull():
             self._app_icon.setPixmap(
                 icon_pixmap.scaled(
-                    18,
-                    18,
+                    20,
+                    20,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
             )
-        self._app_icon.setFixedSize(18, 18)
+        self._app_icon.setFixedSize(20, 20)
 
         self._title_label = QLabel("BabkaCode")
         self._title_label.setObjectName("titleLabel")
@@ -126,7 +126,7 @@ class TitleBar(QWidget):
         btn.setToolTip(tooltip)
         btn.setCursor(Qt.CursorShape.ArrowCursor)
         btn.setAutoRaise(True)
-        btn.setFixedSize(30, 30)
+        btn.setFixedSize(32, 32)
         return btn
 
     def _handle_minimize(self) -> None:

@@ -47,7 +47,7 @@ _LINK_INTERCEPT_JS = """
 })();
 """
 
-_BG_COLOR = "#1a1a1a"
+_BG_COLOR = "#161618"
 
 
 class ChatWebView(QWidget):
