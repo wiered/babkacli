@@ -37,6 +37,12 @@ or directly:
 python -m src.ui
 ```
 
+## Testing
+
+```
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
 ### UI terminal
 
 The embedded terminal is a PySide6 interactive ANSI/VT100 terminal. On Windows it uses `winpty` for live streaming output and full-screen control sequences; `QProcess` remains the fallback transport backend. It starts PowerShell with `-NoProfile`, `POWERSHELL_DISABLE_TELEMETRY=1`, `TERM=xterm-256color`, and `COLORTERM=truecolor`.

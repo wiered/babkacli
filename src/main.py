@@ -21,15 +21,18 @@ if __package__ in {None, ""}:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 
     from src.system_prompts.prompts import build_system_prompt_for_mode
-    from src.utils.commands import CommandExecutionError, parse_and_dispatch_agent_response
-    from src.utils.json_parser import AgentResponseParseError
+    from src.toolcall.commands import CommandExecutionError, parse_and_dispatch_agent_response
+    from src.toolcall.json_parser import AgentResponseParseError
 else:
     from .system_prompts.prompts import build_system_prompt_for_mode
-    from .utils.commands import CommandExecutionError, parse_and_dispatch_agent_response
-    from .utils.json_parser import AgentResponseParseError
+    from .toolcall.commands import CommandExecutionError, parse_and_dispatch_agent_response
+    from .toolcall.json_parser import AgentResponseParseError
+
+from dotenv import load_dotenv
+load_dotenv()
+DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
 
 ENDPOINT = "https://models.github.ai/inference"
-DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4.1-mini")
 DEFAULT_MAX_STEPS = 8
 
 
@@ -148,8 +151,8 @@ def run_repl(*, workspace: Path, model: str, max_steps: int) -> int:
             return 0
         if user_text.lower() in {"/md"}:
             text = """
-Напиши все доступные виды форматирования markdown доступные для result.
-Для блока кода напиши код hello world с использованием def main():.
+Напиши полноценно форматированный markdown документ с демонстрацией
+всех форматирований доступных в result для теста отображения markdown в клиенте
             """
             messages.append(UserMessage(text))
             result = _execute_agent_turn(

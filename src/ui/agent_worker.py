@@ -39,26 +39,39 @@ from PySide6.QtWidgets import (
 )
 
 if __package__ in {None, ""}:
-    from ..system_prompts.prompts import build_system_prompt_for_mode
-    from ..utils.json_parser import AgentResponseParseError, parse_agent_response
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+
+    from src.system_prompts.prompts import build_system_prompt_for_mode
+    from src.toolcall.commands import CommandExecutionError, dispatch_command
+    from src.toolcall.json_parser import AgentResponseParseError, parse_agent_response
+    from src.utils.workspace import use_workspace_root
+    from src.ui.ui_utils import (
+        allowed_commands_for_mode,
+        build_client,
+        call_model,
+        format_json,
+        normalize_mode,
+    )
 else:
     from ..system_prompts.prompts import build_system_prompt_for_mode
-    from ..utils.json_parser import AgentResponseParseError, parse_agent_response
+    from ..toolcall.commands import CommandExecutionError, dispatch_command
+    from ..toolcall.json_parser import AgentResponseParseError, parse_agent_response
+    from ..utils.workspace import use_workspace_root
     from ..ui.ui_utils import (
-        normalize_mode,
-        build_client,
         allowed_commands_for_mode,
+        build_client,
         call_model,
-        dispatch_workspace_command,
         format_json,
-        WorkspaceCommandError
+        normalize_mode,
     )
 
 class AgentWorker(QObject):
     """Run one user request against the agent in a background thread."""
 
     step_started = Signal(int, int)
-    assistant_response = Signal(int, str)
+    assistant_response = Signal(int, str, object)
     repair_requested = Signal(int, str)
     command_executed = Signal(int, str, object)
     finished = Signal(str, object)
@@ -89,21 +102,18 @@ class AgentWorker(QObject):
 
             for step in range(1, self._max_steps + 1):
                 self.step_started.emit(step, self._max_steps)
-                raw_response = call_model(client, messages=messages, model=self._model)
+                raw_response, usage = call_model(client, messages=messages, model=self._model)
                 messages.append(AssistantMessage(content=raw_response))
-                self.assistant_response.emit(step, raw_response)
+                self.assistant_response.emit(step, raw_response, usage)
 
                 try:
                     parsed = parse_agent_response(
                         raw_response,
                         allowed_commands=allowed_commands,
                     )
-                    outcome = dispatch_workspace_command(
-                        workspace,
-                        parsed.command,
-                        parsed.arguments,
-                    )
-                except (AgentResponseParseError, WorkspaceCommandError, ValueError) as exc:
+                    with use_workspace_root(workspace):
+                        outcome = dispatch_command(parsed)
+                except (AgentResponseParseError, CommandExecutionError, ValueError) as exc:
                     repair_message = (
                         "Invalid command response from the assistant: "
                         f"{exc}. Return only a JSON object with a supported command."

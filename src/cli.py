@@ -10,7 +10,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from .utils.commands import CommandExecutionError, parse_and_dispatch_agent_response
+from .toolcall.commands import CommandExecutionError, parse_and_dispatch_agent_response
 
 
 def _repo_root() -> Path:

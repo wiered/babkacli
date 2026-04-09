@@ -1,3 +1,4 @@
+import os
 from types import SimpleNamespace
 
 from azure.ai.inference.models import SystemMessage
@@ -168,6 +169,7 @@ def test_allowed_commands_for_ask_mode_are_read_only():
 
 def test_allowed_commands_for_agent_mode_include_write_actions():
     assert _allowed_commands_for_mode("agent") == {
+        "codeact",
         "createFiles",
         "createFolders",
         "done",
@@ -183,7 +185,7 @@ def test_build_messages_uses_selected_mode_prompt():
 
     assert len(messages) == 1
     assert isinstance(messages[0], SystemMessage)
-    assert "режиме ask" in messages[0].content
+    assert "in ask mode" in messages[0].content
     assert "writefile:" not in messages[0].content
 
 
@@ -366,7 +368,11 @@ def test_agent_window_uses_frameless_custom_title_bar(tmp_path):
     app = QApplication.instance() or QApplication([])
     assert app is not None
 
-    window = AgentStudioWindow(workspace=tmp_path, model="gpt-4.1-mini", max_steps=10)
+    from dotenv import load_dotenv
+    load_dotenv()
+    DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+
+    window = AgentStudioWindow(workspace=tmp_path, model=DEFAULT_MODEL, max_steps=10)
     try:
         flags = window.windowFlags()
         assert bool(flags & agent_studio_window_module.Qt.WindowType.FramelessWindowHint)
@@ -389,6 +395,41 @@ def test_agent_window_uses_frameless_custom_title_bar(tmp_path):
         assert not window._title_bar._app_icon.isHidden()
         assert not window._title_bar._controls.isHidden()
         assert not hasattr(window, "_title_bar_secondary")
+    finally:
+        window.close()
+
+
+def test_chat_webview_exposes_unified_api(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    from src.web_chat.chat_webview import ChatWebView
+
+    view = ChatWebView()
+    try:
+        assert view.backend_name() in ("webview2", "webengine")
+        assert hasattr(view, "link_activated")
+        assert hasattr(view, "content_loaded")
+
+        view.set_html("<html><body>hello</body></html>")
+        view.run_js("1+1")
+    finally:
+        view.close()
+
+
+def test_agent_window_chat_view_is_chat_webview(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    from src.web_chat.chat_webview import ChatWebView
+
+    from dotenv import load_dotenv
+    load_dotenv()
+    DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+
+    window = AgentStudioWindow(workspace=tmp_path, model=DEFAULT_MODEL, max_steps=10)
+    try:
+        assert isinstance(window._chat_view, ChatWebView)
     finally:
         window.close()
 
