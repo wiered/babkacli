@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 from ..utils.workspace import workspace_root
-from .utils import resolve
 from .errors import CodeActFilesError
 from .utils import resolve as resolve_universal
+
 
 def resolve(path: str | Path) -> Path:
     return resolve_universal(path, CodeActFilesError)
@@ -30,7 +30,9 @@ class CodeActFiles:
         ignore_set = frozenset(ignore) if ignore else frozenset()
 
         entries: list[dict[str, Any]] = []
-        for entry in sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
+        for entry in sorted(
+            target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())
+        ):
             if entry.is_dir() and entry.name in ignore_set:
                 continue
             entries.append(

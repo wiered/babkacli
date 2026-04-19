@@ -35,7 +35,9 @@ else:
     try:
         LRESULT = wintypes.LRESULT  # type: ignore[attr-defined]
     except AttributeError:
-        LRESULT = ctypes.c_longlong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_long
+        LRESULT = (
+            ctypes.c_longlong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_long
+        )
 
     # =========================
     # WinAPI constants/types (verbatim from prototype.py)
@@ -199,12 +201,20 @@ else:
             hwnd = int(self.winId())
             style = user32.GetWindowLongW(hwnd, GWL_STYLE)
             style |= (
-                WS_THICKFRAME | WS_CAPTION | WS_SYSMENU
-                | WS_MAXIMIZEBOX | WS_MINIMIZEBOX
+                WS_THICKFRAME
+                | WS_CAPTION
+                | WS_SYSMENU
+                | WS_MAXIMIZEBOX
+                | WS_MINIMIZEBOX
             )
             user32.SetWindowLongW(hwnd, GWL_STYLE, style)
             user32.SetWindowPos(
-                hwnd, None, 0, 0, 0, 0,
+                hwnd,
+                None,
+                0,
+                0,
+                0,
+                0,
                 SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
             )
 
@@ -336,7 +346,10 @@ else:
 
             if msg.message in (WM_NCLBUTTONDOWN, WM_NCLBUTTONDBLCLK):
                 result = user32.DefWindowProcW(
-                    hwnd, msg.message, msg.wParam, msg.lParam,
+                    hwnd,
+                    msg.message,
+                    msg.wParam,
+                    msg.lParam,
                 )
                 return True, int(result)
 

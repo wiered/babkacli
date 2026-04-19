@@ -2,48 +2,18 @@
 
 from __future__ import annotations
 
-import argparse
-import html
-import json
-import os
-import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from azure.ai.inference import ChatCompletionsClient
-from azure.ai.inference.models import AssistantMessage, SystemMessage, UserMessage
-from azure.core.credentials import AzureKeyCredential
-from dotenv import load_dotenv
-from PySide6.QtCore import QDir, QModelIndex, QObject, QProcess, Qt, QThread, QUrl, Signal
-from PySide6.QtGui import QAction, QFont, QFontDatabase, QKeySequence, QTextCursor
-from PySide6.QtWidgets import (
-    QApplication,
-    QComboBox,
-    QFileSystemModel,
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QSplitter,
-    QStatusBar,
-    QTextBrowser,
-    QPlainTextEdit,
-    QToolBar,
-    QTreeView,
-    QVBoxLayout,
-    QWidget,
-)
+from azure.ai.inference.models import AssistantMessage, UserMessage
+from PySide6.QtCore import QObject, Signal
 
 if __package__ in {None, ""}:
     import sys
 
     sys.path.append(str(Path(__file__).resolve().parents[2]))
 
-    from src.system_prompts.prompts import build_system_prompt_for_mode
     from src.toolcall.commands import CommandExecutionError, dispatch_command
     from src.toolcall.json_parser import AgentResponseParseError, parse_agent_response
     from src.utils.workspace import use_workspace_root
@@ -55,7 +25,6 @@ if __package__ in {None, ""}:
         normalize_mode,
     )
 else:
-    from ..system_prompts.prompts import build_system_prompt_for_mode
     from ..toolcall.commands import CommandExecutionError, dispatch_command
     from ..toolcall.json_parser import AgentResponseParseError, parse_agent_response
     from ..utils.workspace import use_workspace_root
@@ -66,6 +35,7 @@ else:
         format_json,
         normalize_mode,
     )
+
 
 class AgentWorker(QObject):
     """Run one user request against the agent in a background thread."""
@@ -102,7 +72,9 @@ class AgentWorker(QObject):
 
             for step in range(1, self._max_steps + 1):
                 self.step_started.emit(step, self._max_steps)
-                raw_response, usage = call_model(client, messages=messages, model=self._model)
+                raw_response, usage = call_model(
+                    client, messages=messages, model=self._model
+                )
                 messages.append(AssistantMessage(content=raw_response))
                 self.assistant_response.emit(step, raw_response, usage)
 
@@ -113,7 +85,11 @@ class AgentWorker(QObject):
                     )
                     with use_workspace_root(workspace):
                         outcome = dispatch_command(parsed)
-                except (AgentResponseParseError, CommandExecutionError, ValueError) as exc:
+                except (
+                    AgentResponseParseError,
+                    CommandExecutionError,
+                    ValueError,
+                ) as exc:
                     repair_message = (
                         "Invalid command response from the assistant: "
                         f"{exc}. Return only a JSON object with a supported command."
@@ -138,6 +114,8 @@ class AgentWorker(QObject):
                     )
                 )
 
-            self.finished.emit("Agent stopped after reaching the maximum number of steps.", messages)
+            self.finished.emit(
+                "Agent stopped after reaching the maximum number of steps.", messages
+            )
         except Exception as exc:  # noqa: BLE001 - surface any unexpected backend issue to the UI
             self.error.emit(str(exc))

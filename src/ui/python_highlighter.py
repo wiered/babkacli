@@ -16,14 +16,14 @@ class PythonHighlighter(QSyntaxHighlighter):
         super().__init__(document)
         self._enabled = True
 
-        self._keyword_format = self._make_format("#c586c0", bold=True)
-        self._builtin_format = self._make_format("#4ec9b0")
-        self._class_format = self._make_format("#4fc1ff", bold=True)
-        self._function_format = self._make_format("#dcdcaa")
-        self._decorator_format = self._make_format("#c586c0")
-        self._number_format = self._make_format("#b5cea8")
-        self._comment_format = self._make_format("#6a9955", italic=True)
-        self._string_format = self._make_format("#ce9178")
+        self._keyword_format = self._make_format("#c792ea", bold=True)  # purple
+        self._builtin_format = self._make_format("#80cbc4")  # teal
+        self._class_format = self._make_format("#82aaff", bold=True)  # blue
+        self._function_format = self._make_format("#f6c177")  # amber
+        self._decorator_format = self._make_format("#c792ea")  # purple
+        self._number_format = self._make_format("#f78c6c")  # orange
+        self._comment_format = self._make_format("#546e7a", italic=True)  # steel gray
+        self._string_format = self._make_format("#c3e88d")  # green
 
         keywords = [
             "and",
@@ -87,8 +87,12 @@ class PythonHighlighter(QSyntaxHighlighter):
             "zip",
         ]
 
-        self._keyword_patterns = [QRegularExpression(rf"\b{word}\b") for word in keywords]
-        self._builtin_patterns = [QRegularExpression(rf"\b{word}\b") for word in builtins]
+        self._keyword_patterns = [
+            QRegularExpression(rf"\b{word}\b") for word in keywords
+        ]
+        self._builtin_patterns = [
+            QRegularExpression(rf"\b{word}\b") for word in builtins
+        ]
         self._function_pattern = QRegularExpression(r"\bdef\s+([A-Za-z_][A-Za-z0-9_]*)")
         self._class_pattern = QRegularExpression(r"\bclass\s+([A-Za-z_][A-Za-z0-9_]*)")
         self._number_pattern = QRegularExpression(
@@ -100,7 +104,9 @@ class PythonHighlighter(QSyntaxHighlighter):
             r"""(?:[rRuUbBfF]{0,2})?(?:'[^'\\\n]*(?:\\.[^'\\\n]*)*'|\"[^\"\\\n]*(?:\\.[^\"\\\n]*)*\")"""
         )
         self._comment_pattern = QRegularExpression(r"#.*$")
-        self._triple_start_pattern = QRegularExpression(r"(?<!\\)(?:[rRuUbBfF]{0,2})?('''|\"\"\")")
+        self._triple_start_pattern = QRegularExpression(
+            r"(?<!\\)(?:[rRuUbBfF]{0,2})?('''|\"\"\")"
+        )
 
     def set_enabled(self, enabled: bool) -> None:
         if self._enabled == enabled:
@@ -117,12 +123,32 @@ class PythonHighlighter(QSyntaxHighlighter):
 
         protected_ranges = self._highlight_strings(text)
         self._highlight_comments(text, protected_ranges)
-        self._highlight_regex(text, self._keyword_patterns, self._keyword_format, protected_ranges)
-        self._highlight_regex(text, self._builtin_patterns, self._builtin_format, protected_ranges)
-        self._highlight_regex(text, [self._function_pattern], self._function_format, protected_ranges, capture=1)
-        self._highlight_regex(text, [self._class_pattern], self._class_format, protected_ranges, capture=1)
-        self._highlight_regex(text, [self._number_pattern], self._number_format, protected_ranges)
-        self._highlight_regex(text, [self._decorator_pattern], self._decorator_format, protected_ranges, capture=1)
+        self._highlight_regex(
+            text, self._keyword_patterns, self._keyword_format, protected_ranges
+        )
+        self._highlight_regex(
+            text, self._builtin_patterns, self._builtin_format, protected_ranges
+        )
+        self._highlight_regex(
+            text,
+            [self._function_pattern],
+            self._function_format,
+            protected_ranges,
+            capture=1,
+        )
+        self._highlight_regex(
+            text, [self._class_pattern], self._class_format, protected_ranges, capture=1
+        )
+        self._highlight_regex(
+            text, [self._number_pattern], self._number_format, protected_ranges
+        )
+        self._highlight_regex(
+            text,
+            [self._decorator_pattern],
+            self._decorator_format,
+            protected_ranges,
+            capture=1,
+        )
 
     def _highlight_strings(self, text: str) -> list[tuple[int, int]]:
         ranges: list[tuple[int, int]] = []
@@ -146,12 +172,28 @@ class PythonHighlighter(QSyntaxHighlighter):
                 delimiter = match.captured(1)
                 end = text.find(delimiter, match.capturedStart(1) + 3)
                 if end == -1:
-                    self.setFormat(match.capturedStart(0), len(text) - match.capturedStart(0), self._string_format)
-                    self.setCurrentBlockState(self._TRIPLE_SINGLE if delimiter == "'''" else self._TRIPLE_DOUBLE)
-                    ranges.append((match.capturedStart(0), len(text) - match.capturedStart(0)))
+                    self.setFormat(
+                        match.capturedStart(0),
+                        len(text) - match.capturedStart(0),
+                        self._string_format,
+                    )
+                    self.setCurrentBlockState(
+                        self._TRIPLE_SINGLE
+                        if delimiter == "'''"
+                        else self._TRIPLE_DOUBLE
+                    )
+                    ranges.append(
+                        (match.capturedStart(0), len(text) - match.capturedStart(0))
+                    )
                     return ranges
-                self.setFormat(match.capturedStart(0), end + 3 - match.capturedStart(0), self._string_format)
-                ranges.append((match.capturedStart(0), end + 3 - match.capturedStart(0)))
+                self.setFormat(
+                    match.capturedStart(0),
+                    end + 3 - match.capturedStart(0),
+                    self._string_format,
+                )
+                ranges.append(
+                    (match.capturedStart(0), end + 3 - match.capturedStart(0))
+                )
                 start = end + 3
                 continue
 
@@ -167,8 +209,12 @@ class PythonHighlighter(QSyntaxHighlighter):
 
         return ranges
 
-    def _highlight_comments(self, text: str, protected_ranges: list[tuple[int, int]]) -> None:
-        self._highlight_regex(text, [self._comment_pattern], self._comment_format, protected_ranges)
+    def _highlight_comments(
+        self, text: str, protected_ranges: list[tuple[int, int]]
+    ) -> None:
+        self._highlight_regex(
+            text, [self._comment_pattern], self._comment_format, protected_ranges
+        )
 
     def _highlight_regex(
         self,
@@ -185,11 +231,15 @@ class PythonHighlighter(QSyntaxHighlighter):
                 match = iterator.next()
                 start = match.capturedStart(capture)
                 length = match.capturedLength(capture)
-                if length <= 0 or self._overlaps_protected(start, length, protected_ranges):
+                if length <= 0 or self._overlaps_protected(
+                    start, length, protected_ranges
+                ):
                     continue
                 self.setFormat(start, length, format_)
 
-    def _overlaps_protected(self, start: int, length: int, protected_ranges: list[tuple[int, int]]) -> bool:
+    def _overlaps_protected(
+        self, start: int, length: int, protected_ranges: list[tuple[int, int]]
+    ) -> bool:
         end = start + length
         for protected_start, protected_length in protected_ranges:
             protected_end = protected_start + protected_length
@@ -197,7 +247,9 @@ class PythonHighlighter(QSyntaxHighlighter):
                 return True
         return False
 
-    def _make_format(self, color: str, *, bold: bool = False, italic: bool = False) -> QTextCharFormat:
+    def _make_format(
+        self, color: str, *, bold: bool = False, italic: bool = False
+    ) -> QTextCharFormat:
         format_ = QTextCharFormat()
         format_.setForeground(QColor(color))
         if bold:

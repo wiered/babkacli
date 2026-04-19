@@ -8,11 +8,16 @@ from src.ui import _allowed_commands_for_mode, _build_messages
 from src.ui import agent_studio_window as agent_studio_window_module
 from src.ui.agent_studio_window import AgentStudioWindow
 from src.ui import interactive_terminal as interactive_terminal_module
+from src.ui.style import STYLE_SHEET
 from src.ui import terminal as terminal_module
 from src.ui import windows_frame as windows_frame_module
+from src.web_chat.chat_event import ChatEvent
+from src.web_chat import html_generator as html_generator_module
+from src.web_chat.html_generator import render_chat_history
 from PySide6.QtCore import QPoint, QSize
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QToolButton
+from PySide6.QtWidgets import QWidget
 
 
 class _FakeSignal:
@@ -205,7 +210,10 @@ def test_terminal_starts_pyside6_pseudo_backend(monkeypatch):
     assert controller._process.program == "pwsh"
     assert controller._process.args == ["-NoLogo", "-NoExit", "-Command", "-"]
     assert controller._process.process_environment is not None
-    assert controller._process.process_environment.value("POWERSHELL_DISABLE_TELEMETRY") == "1"
+    assert (
+        controller._process.process_environment.value("POWERSHELL_DISABLE_TELEMETRY")
+        == "1"
+    )
     assert controller._process.process_environment.value("TERM") == "xterm-256color"
     assert controller._process.process_environment.value("COLORTERM") == "truecolor"
 
@@ -244,7 +252,9 @@ def test_terminal_textedit_strips_shell_prompt_and_command_echo():
 
     terminal = terminal_module.TerminalTextEdit()
     terminal.expect_command_echo("py -m main")
-    terminal.append_output("pwsh> py -m main\nВремя работы quicksort: 0.007226 секунд\n")
+    terminal.append_output(
+        "pwsh> py -m main\nВремя работы quicksort: 0.007226 секунд\n"
+    )
 
     assert terminal.toPlainText() == "Время работы quicksort: 0.007226 секунд\npwsh> "
 
@@ -252,7 +262,9 @@ def test_terminal_textedit_strips_shell_prompt_and_command_echo():
 def test_terminal_winpty_backend_streams_output(monkeypatch):
     monkeypatch.setattr(terminal_module, "PtyProcess", _FakePtyProcess)
     controller = terminal_module.TerminalController()
-    controller._process = _FakePtyProcess.spawn(["pwsh", "-NoLogo", "-NoProfile", "-NoExit"], cwd="C:/workspace")
+    controller._process = _FakePtyProcess.spawn(
+        ["pwsh", "-NoLogo", "-NoProfile", "-NoExit"], cwd="C:/workspace"
+    )
     controller._backend = "winpty"
 
     received: list[str] = []
@@ -292,14 +304,22 @@ def test_title_bar_hit_test_treats_caption_area_as_caption():
         childAt=lambda point: button if point == QPoint(770, 10) else None,
     )
 
-    assert windows_frame_module.hit_test_title_bar(fake_title_bar, QPoint(150, 60)) is True
-    assert windows_frame_module.hit_test_title_bar(fake_title_bar, QPoint(870, 60)) is False
+    assert (
+        windows_frame_module.hit_test_title_bar(fake_title_bar, QPoint(150, 60)) is True
+    )
+    assert (
+        windows_frame_module.hit_test_title_bar(fake_title_bar, QPoint(870, 60))
+        is False
+    )
 
 
 def test_resize_border_hit_test_includes_top_edge():
     frame_geometry = windows_frame_module.QRect(100, 50, 800, 600)
 
-    assert windows_frame_module.hit_test_resize_border(frame_geometry, QPoint(500, 52)) == windows_frame_module.HTTOP
+    assert (
+        windows_frame_module.hit_test_resize_border(frame_geometry, QPoint(500, 52))
+        == windows_frame_module.HTTOP
+    )
 
 
 def test_resolve_hit_test_returns_client_when_maximized_outside_title_bar():
@@ -311,19 +331,32 @@ def test_resolve_hit_test_returns_client_when_maximized_outside_title_bar():
     )
     frame_geometry = windows_frame_module.QRect(100, 50, 800, 600)
 
-    assert windows_frame_module.resolve_hit_test(
-        title_bar=fake_title_bar,
-        frame_geometry=frame_geometry,
-        cursor_pos=QPoint(102, 120),
-        is_maximized=True,
-    ) == windows_frame_module.HTCLIENT
+    assert (
+        windows_frame_module.resolve_hit_test(
+            title_bar=fake_title_bar,
+            frame_geometry=frame_geometry,
+            cursor_pos=QPoint(102, 120),
+            is_maximized=True,
+        )
+        == windows_frame_module.HTCLIENT
+    )
 
 
 def test_apply_extended_client_area_noops_without_native_handle(monkeypatch):
     calls: list[object] = []
 
-    monkeypatch.setattr(windows_frame_module, "_dwm_extend_frame_into_client_area", lambda *args: calls.append("dwm"), raising=False)
-    monkeypatch.setattr(windows_frame_module, "_set_window_pos", lambda *args: calls.append("swp"), raising=False)
+    monkeypatch.setattr(
+        windows_frame_module,
+        "_dwm_extend_frame_into_client_area",
+        lambda *args: calls.append("dwm"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        windows_frame_module,
+        "_set_window_pos",
+        lambda *args: calls.append("swp"),
+        raising=False,
+    )
 
     class _FakeWindow:
         def winId(self) -> int:
@@ -335,7 +368,9 @@ def test_apply_extended_client_area_noops_without_native_handle(monkeypatch):
 
 
 def test_apply_nccalcsize_insets_uses_dpi_aware_top_border(monkeypatch):
-    monkeypatch.setattr(windows_frame_module, "top_client_inset_for_window", lambda window: 11)
+    monkeypatch.setattr(
+        windows_frame_module, "top_client_inset_for_window", lambda window: 11
+    )
     rect = windows_frame_module.RECT(0, 100, 500, 400)
 
     windows_frame_module.apply_nccalcsize_insets(object(), rect)
@@ -344,7 +379,9 @@ def test_apply_nccalcsize_insets_uses_dpi_aware_top_border(monkeypatch):
 
 
 def test_top_client_inset_is_zero_for_maximized_window(monkeypatch):
-    monkeypatch.setattr(windows_frame_module, "frame_border_thickness_for_window", lambda window: 12)
+    monkeypatch.setattr(
+        windows_frame_module, "frame_border_thickness_for_window", lambda window: 12
+    )
 
     class _FakeWindow:
         def isMaximized(self) -> bool:
@@ -357,7 +394,9 @@ def test_terminal_winpty_submit_command_writes_carriage_return(monkeypatch):
     monkeypatch.setattr(terminal_module, "PtyProcess", _FakePtyProcess)
 
     controller = terminal_module.TerminalController()
-    controller._process = _FakePtyProcess.spawn(["pwsh", "-NoLogo", "-NoProfile", "-NoExit"], cwd="C:/workspace")
+    controller._process = _FakePtyProcess.spawn(
+        ["pwsh", "-NoLogo", "-NoProfile", "-NoExit"], cwd="C:/workspace"
+    )
     controller._backend = "winpty"
 
     controller.submit_command("Get-ChildItem")
@@ -369,17 +408,24 @@ def test_agent_window_uses_frameless_custom_title_bar(tmp_path):
     assert app is not None
 
     from dotenv import load_dotenv
+
     load_dotenv()
     DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
 
     window = AgentStudioWindow(workspace=tmp_path, model=DEFAULT_MODEL, max_steps=10)
     try:
         flags = window.windowFlags()
-        assert bool(flags & agent_studio_window_module.Qt.WindowType.FramelessWindowHint)
-        expanded_client_area_hint = getattr(agent_studio_window_module.Qt.WindowType, "ExpandedClientAreaHint", None)
+        assert bool(
+            flags & agent_studio_window_module.Qt.WindowType.FramelessWindowHint
+        )
+        expanded_client_area_hint = getattr(
+            agent_studio_window_module.Qt.WindowType, "ExpandedClientAreaHint", None
+        )
         if expanded_client_area_hint is not None:
             assert not bool(flags & expanded_client_area_hint)
-        no_title_bar_background_hint = getattr(agent_studio_window_module.Qt.WindowType, "NoTitleBarBackgroundHint", None)
+        no_title_bar_background_hint = getattr(
+            agent_studio_window_module.Qt.WindowType, "NoTitleBarBackgroundHint", None
+        )
         if no_title_bar_background_hint is not None:
             assert not bool(flags & no_title_bar_background_hint)
         assert window._title_bar.parentWidget() is window.centralWidget()
@@ -424,6 +470,7 @@ def test_agent_window_chat_view_is_chat_webview(tmp_path):
     from src.web_chat.chat_webview import ChatWebView
 
     from dotenv import load_dotenv
+
     load_dotenv()
     DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
 
@@ -432,6 +479,91 @@ def test_agent_window_chat_view_is_chat_webview(tmp_path):
         assert isinstance(window._chat_view, ChatWebView)
     finally:
         window.close()
+
+
+def test_style_sheet_uses_warm_light_palette_and_explorer_hooks():
+    assert "QWidget#explorerPanel" in STYLE_SHEET
+    assert "QTreeView#explorerTree" in STYLE_SHEET
+    assert "QWidget#chatPanel" in STYLE_SHEET
+    assert "#f6efe5" in STYLE_SHEET
+    assert "#fffaf4" in STYLE_SHEET
+    assert "#5c8ca8" in STYLE_SHEET
+    assert "#161618" not in STYLE_SHEET
+
+
+def test_agent_window_explorer_uses_custom_hooks_and_tracks_open_file(
+    tmp_path, monkeypatch
+):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+
+    main_file = tmp_path / "main.py"
+    main_file.write_text("print('hello')\n", encoding="utf-8")
+
+    class _StubInteractiveTerminal(QWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.data_ready = _FakeSignal()
+            self.resize_requested = _FakeSignal()
+            self.interrupt_requested = _FakeSignal()
+
+        def setPlaceholderText(self, _text: str) -> None:
+            pass
+
+    monkeypatch.setattr(
+        agent_studio_window_module, "InteractiveTerminal", _StubInteractiveTerminal
+    )
+
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+
+    window = AgentStudioWindow(workspace=tmp_path, model=DEFAULT_MODEL, max_steps=10)
+    try:
+        explorer_panel = window.findChild(
+            agent_studio_window_module.QWidget, "explorerPanel"
+        )
+        assert explorer_panel is not None
+        assert explorer_panel.property("surfaceRole") == "navigation"
+        assert window._tree_view.objectName() == "explorerTree"
+        assert window._tree_view.property("surfaceRole") == "explorer"
+        assert type(window._tree_view.itemDelegate()).__name__ == "ExplorerItemDelegate"
+        assert window._splitter.objectName() == "mainSplitter"
+        assert window._current_file == main_file
+    finally:
+        window.close()
+
+
+def test_render_chat_history_uses_light_theme_colors(monkeypatch):
+    monkeypatch.setattr(
+        html_generator_module,
+        "monospace_font_stack_css",
+        lambda: "'JetBrains Mono', Consolas, 'Courier New'",
+    )
+    html_doc = "".join(
+        render_chat_history(
+            [
+                ChatEvent(
+                    kind="message",
+                    tone="assistant",
+                    body="See `value`\n```py\nprint('x')\n```",
+                ),
+                ChatEvent(kind="message", tone="user", body="hello"),
+                ChatEvent(kind="message", tone="error", title="Ошибка", body="boom"),
+            ],
+            set(),
+        )
+    )
+
+    assert "background: #fbf6ee;" in html_doc
+    assert "#efe1d0" in html_doc
+    assert "#f3eadf" in html_doc
+    assert "#f8e8e4" in html_doc
+    assert 'class="assistant-result"' in html_doc
+    assert "copy:cb_0" in html_doc
+    assert "#161618" not in html_doc
+    assert "#222226" not in html_doc
 
 
 def test_interactive_terminal_emulator_handles_cursor_rewrites():
@@ -461,7 +593,9 @@ def test_interactive_terminal_emulator_supports_sgr_and_dec_graphics():
 
     emulator.feed("\x1b[31mR\x1b[0m\x1b(0lqk")
 
-    assert emulator.screen[0][0].style.fg == interactive_terminal_module.ANSI_16_COLORS[1]
+    assert (
+        emulator.screen[0][0].style.fg == interactive_terminal_module.ANSI_16_COLORS[1]
+    )
     assert emulator.display_lines(include_scrollback=False)[0].startswith("R┌─┐")
 
 

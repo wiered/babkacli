@@ -7,6 +7,7 @@ def test_openai():
     endpoint = "https://models.github.ai/inference"
 
     from dotenv import load_dotenv
+
     load_dotenv()
 
     model = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
@@ -23,15 +24,18 @@ def test_openai():
             SystemMessage("You are a helpful assistant."),
             UserMessage("What is the capital of France?"),
         ],
-        model=model
+        model=model,
     )
 
     print(response.choices[0].message.content)
 
+
 def test_codeact():
     from src.codeact.codeact import CodeAct
+
     codeact = CodeAct()
     print(codeact.files.ls("."))
+
 
 if __name__ == "__main__":
     test_codeact()

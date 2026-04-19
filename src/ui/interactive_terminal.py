@@ -15,29 +15,29 @@ if __package__ in {None, ""}:
 else:
     from .ui_utils import monospace_font_stack_css
 
-DEFAULT_FOREGROUND: Final[tuple[int, int, int]] = (212, 212, 212)
-DEFAULT_BACKGROUND: Final[tuple[int, int, int]] = (17, 17, 17)
-CURSOR_FOREGROUND: Final[tuple[int, int, int]] = (17, 17, 17)
-CURSOR_BACKGROUND: Final[tuple[int, int, int]] = (212, 212, 212)
+DEFAULT_FOREGROUND: Final[tuple[int, int, int]] = (226, 228, 234)  # TEXT_PRIMARY
+DEFAULT_BACKGROUND: Final[tuple[int, int, int]] = (20, 22, 28)  # BG_SURFACE
+CURSOR_FOREGROUND: Final[tuple[int, int, int]] = (20, 22, 28)
+CURSOR_BACKGROUND: Final[tuple[int, int, int]] = (226, 228, 234)
 SCROLLBACK_LIMIT: Final[int] = 5000
 
 ANSI_16_COLORS: Final[tuple[tuple[int, int, int], ...]] = (
-    (0, 0, 0),
-    (205, 49, 49),
-    (13, 188, 121),
-    (229, 229, 16),
-    (36, 114, 200),
-    (188, 63, 188),
-    (17, 168, 205),
-    (229, 229, 229),
-    (102, 102, 102),
-    (241, 76, 76),
-    (35, 209, 139),
-    (245, 245, 67),
-    (59, 142, 234),
-    (214, 112, 214),
-    (41, 184, 219),
-    (255, 255, 255),
+    (14, 16, 21),  # 0  black
+    (240, 113, 120),  # 1  red
+    (195, 232, 141),  # 2  green
+    (255, 203, 107),  # 3  yellow
+    (130, 170, 255),  # 4  blue
+    (199, 146, 234),  # 5  magenta
+    (137, 221, 255),  # 6  cyan
+    (176, 190, 197),  # 7  white
+    (84, 86, 105),  # 8  bright black (gray)
+    (255, 85, 114),  # 9  bright red
+    (204, 255, 176),  # 10 bright green
+    (255, 230, 120),  # 11 bright yellow
+    (130, 177, 255),  # 12 bright blue
+    (215, 160, 255),  # 13 bright magenta
+    (128, 203, 196),  # 14 bright cyan
+    (236, 239, 244),  # 15 bright white
 )
 
 DEC_SPECIAL_GRAPHICS: Final[dict[str, str]] = {
@@ -148,7 +148,13 @@ class SavedCursor:
 class TerminalEmulator:
     """A compact VT100/xterm-style screen emulator with scrollback."""
 
-    def __init__(self, rows: int = 24, columns: int = 80, *, scrollback_limit: int = SCROLLBACK_LIMIT) -> None:
+    def __init__(
+        self,
+        rows: int = 24,
+        columns: int = 80,
+        *,
+        scrollback_limit: int = SCROLLBACK_LIMIT,
+    ) -> None:
         self.rows = max(2, rows)
         self.columns = max(8, columns)
         self.scrollback_limit = max(0, scrollback_limit)
@@ -156,7 +162,9 @@ class TerminalEmulator:
 
     def reset(self) -> None:
         self.scrollback: list[list[TerminalCell]] = []
-        self.screen: list[list[TerminalCell]] = [self._blank_line() for _ in range(self.rows)]
+        self.screen: list[list[TerminalCell]] = [
+            self._blank_line() for _ in range(self.rows)
+        ]
         self.cursor_row = 0
         self.cursor_column = 0
         self.saved_cursor = SavedCursor()
@@ -210,7 +218,9 @@ class TerminalEmulator:
         self.top_margin = 0
         self.bottom_margin = rows - 1
         self._tab_stops = {column for column in self._tab_stops if column < columns}
-        self._tab_stops.update(column for column in range(8, columns, 8) if column not in self._tab_stops)
+        self._tab_stops.update(
+            column for column in range(8, columns, 8) if column not in self._tab_stops
+        )
         self._wrap_pending = False
 
     def feed(self, data: str) -> list[str]:
@@ -246,7 +256,9 @@ class TerminalEmulator:
         cursor_screen_index = len(lines) - self.rows + self.cursor_row
         html_lines: list[str] = []
         for line_index, line in enumerate(lines):
-            html_lines.append(self._render_html_line(line, line_index == cursor_screen_index))
+            html_lines.append(
+                self._render_html_line(line, line_index == cursor_screen_index)
+            )
 
         body = "\n".join(html_lines) if html_lines else " "
         _mono = monospace_font_stack_css()
@@ -267,14 +279,18 @@ class TerminalEmulator:
             nonlocal current_css, current_run
             if current_css is None:
                 return
-            parts.append(f"<span style=\"{current_css}\">{''.join(current_run) or ' '}</span>")
+            parts.append(
+                f'<span style="{current_css}">{"".join(current_run) or " "}</span>'
+            )
             current_css = None
             current_run = []
 
         for column, cell in enumerate(line):
             css, rendered_char = self._cell_to_html(
                 cell,
-                is_cursor=has_cursor and self.cursor_visible and column == self.cursor_column,
+                is_cursor=has_cursor
+                and self.cursor_visible
+                and column == self.cursor_column,
             )
             if css != current_css:
                 flush()
@@ -308,7 +324,9 @@ class TerminalEmulator:
             decorations.append("underline")
         if style.strike:
             decorations.append("line-through")
-        css.append(f"text-decoration: {' '.join(decorations) if decorations else 'none'}")
+        css.append(
+            f"text-decoration: {' '.join(decorations) if decorations else 'none'}"
+        )
         return "; ".join(css), html.escape(cell.char)
 
     def _feed_char(self, char: str) -> None:
@@ -349,7 +367,14 @@ class TerminalEmulator:
             return
         if char == "\t":
             self._wrap_pending = False
-            next_stop = next((column for column in sorted(self._tab_stops) if column > self.cursor_column), self.columns - 1)
+            next_stop = next(
+                (
+                    column
+                    for column in sorted(self._tab_stops)
+                    if column > self.cursor_column
+                ),
+                self.columns - 1,
+            )
             self.cursor_column = _clamp(next_stop, 0, self.columns - 1)
             return
         if char == "\r":
@@ -481,33 +506,52 @@ class TerminalEmulator:
             self._set_graphics_rendition(params)
             return
         if final == "A":
-            self.cursor_row = max(self._region_top(), self.cursor_row - max(1, integers[0] if integers else 1))
+            self.cursor_row = max(
+                self._region_top(),
+                self.cursor_row - max(1, integers[0] if integers else 1),
+            )
             self._wrap_pending = False
             return
         if final == "B":
-            self.cursor_row = min(self._region_bottom(), self.cursor_row + max(1, integers[0] if integers else 1))
+            self.cursor_row = min(
+                self._region_bottom(),
+                self.cursor_row + max(1, integers[0] if integers else 1),
+            )
             self._wrap_pending = False
             return
         if final == "C":
-            self.cursor_column = min(self.columns - 1, self.cursor_column + max(1, integers[0] if integers else 1))
+            self.cursor_column = min(
+                self.columns - 1,
+                self.cursor_column + max(1, integers[0] if integers else 1),
+            )
             self._wrap_pending = False
             return
         if final == "D":
-            self.cursor_column = max(0, self.cursor_column - max(1, integers[0] if integers else 1))
+            self.cursor_column = max(
+                0, self.cursor_column - max(1, integers[0] if integers else 1)
+            )
             self._wrap_pending = False
             return
         if final == "E":
-            self.cursor_row = min(self._region_bottom(), self.cursor_row + max(1, integers[0] if integers else 1))
+            self.cursor_row = min(
+                self._region_bottom(),
+                self.cursor_row + max(1, integers[0] if integers else 1),
+            )
             self.cursor_column = 0
             self._wrap_pending = False
             return
         if final == "F":
-            self.cursor_row = max(self._region_top(), self.cursor_row - max(1, integers[0] if integers else 1))
+            self.cursor_row = max(
+                self._region_top(),
+                self.cursor_row - max(1, integers[0] if integers else 1),
+            )
             self.cursor_column = 0
             self._wrap_pending = False
             return
         if final in {"G", "`"}:
-            self.cursor_column = _clamp((integers[0] if integers else 1) - 1, 0, self.columns - 1)
+            self.cursor_column = _clamp(
+                (integers[0] if integers else 1) - 1, 0, self.columns - 1
+            )
             self._wrap_pending = False
             return
         if final in {"H", "f"}:
@@ -519,7 +563,10 @@ class TerminalEmulator:
             self._move_cursor((integers[0] if integers else 1) - 1, self.cursor_column)
             return
         if final == "e":
-            self._move_cursor(self.cursor_row + max(1, integers[0] if integers else 1), self.cursor_column)
+            self._move_cursor(
+                self.cursor_row + max(1, integers[0] if integers else 1),
+                self.cursor_column,
+            )
             return
         if final == "J":
             self._erase_in_display(integers[0] if integers else 0)
@@ -568,14 +615,25 @@ class TerminalEmulator:
             return
         if final == "I":
             count = max(1, integers[0] if integers else 1)
-            next_stops = sorted(column for column in self._tab_stops if column > self.cursor_column)
-            self.cursor_column = next_stops[min(count - 1, len(next_stops) - 1)] if next_stops else self.columns - 1
+            next_stops = sorted(
+                column for column in self._tab_stops if column > self.cursor_column
+            )
+            self.cursor_column = (
+                next_stops[min(count - 1, len(next_stops) - 1)]
+                if next_stops
+                else self.columns - 1
+            )
             self._wrap_pending = False
             return
         if final == "Z":
             count = max(1, integers[0] if integers else 1)
-            previous = sorted((column for column in self._tab_stops if column < self.cursor_column), reverse=True)
-            self.cursor_column = previous[min(count - 1, len(previous) - 1)] if previous else 0
+            previous = sorted(
+                (column for column in self._tab_stops if column < self.cursor_column),
+                reverse=True,
+            )
+            self.cursor_column = (
+                previous[min(count - 1, len(previous) - 1)] if previous else 0
+            )
             self._wrap_pending = False
             return
         if final == "b":
@@ -592,13 +650,17 @@ class TerminalEmulator:
 
     def _report_device_status(self, private: str, code: int) -> None:
         if private == "?" and code == 6:
-            self._responses.append(f"\x1b[?{self.cursor_row + 1};{self.cursor_column + 1}R")
+            self._responses.append(
+                f"\x1b[?{self.cursor_row + 1};{self.cursor_column + 1}R"
+            )
             return
         if code == 5:
             self._responses.append("\x1b[0n")
             return
         if code == 6:
-            self._responses.append(f"\x1b[{self.cursor_row + 1};{self.cursor_column + 1}R")
+            self._responses.append(
+                f"\x1b[{self.cursor_row + 1};{self.cursor_column + 1}R"
+            )
 
     def _soft_reset(self) -> None:
         self.current_style = DEFAULT_STYLE
@@ -643,7 +705,9 @@ class TerminalEmulator:
             elif mode == 2004:
                 self.bracketed_paste = enable
 
-    def _use_alternate_screen(self, enable: bool, *, clear: bool, save_cursor: bool) -> None:
+    def _use_alternate_screen(
+        self, enable: bool, *, clear: bool, save_cursor: bool
+    ) -> None:
         if enable == self._alternate_active:
             if enable and clear:
                 self.screen = [self._blank_line() for _ in range(self.rows)]
@@ -662,7 +726,11 @@ class TerminalEmulator:
                 "wrap_pending": self._wrap_pending,
             }
             self._alternate_active = True
-            self.screen = [self._blank_line() for _ in range(self.rows)] if clear else [list(line) for line in self.screen]
+            self.screen = (
+                [self._blank_line() for _ in range(self.rows)]
+                if clear
+                else [list(line) for line in self.screen]
+            )
             self.cursor_row = 0
             self.cursor_column = 0
             self.top_margin = 0
@@ -677,10 +745,17 @@ class TerminalEmulator:
             self.cursor_row = 0
             self.cursor_column = 0
             return
-        self.screen = [self._resize_line(list(line), self.columns) for line in main_state["screen"]]  # type: ignore[index]
-        self.screen = (self.screen + [self._blank_line() for _ in range(self.rows - len(self.screen))])[: self.rows]
+        self.screen = [
+            self._resize_line(list(line), self.columns) for line in main_state["screen"]
+        ]  # type: ignore[index]
+        self.screen = (
+            self.screen
+            + [self._blank_line() for _ in range(self.rows - len(self.screen))]
+        )[: self.rows]
         self.cursor_row = _clamp(int(main_state["cursor_row"]), 0, self.rows - 1)
-        self.cursor_column = _clamp(int(main_state["cursor_column"]), 0, self.columns - 1)
+        self.cursor_column = _clamp(
+            int(main_state["cursor_column"]), 0, self.columns - 1
+        )
         self.saved_cursor = replace(main_state["saved_cursor"])  # type: ignore[arg-type]
         self.top_margin = 0
         self.bottom_margin = self.rows - 1
@@ -735,23 +810,35 @@ class TerminalEmulator:
             elif value == 29:
                 self.current_style = replace(self.current_style, strike=False)
             elif 30 <= value <= 37:
-                self.current_style = replace(self.current_style, fg=ANSI_16_COLORS[value - 30])
+                self.current_style = replace(
+                    self.current_style, fg=ANSI_16_COLORS[value - 30]
+                )
             elif value == 39:
                 self.current_style = replace(self.current_style, fg=None)
             elif 40 <= value <= 47:
-                self.current_style = replace(self.current_style, bg=ANSI_16_COLORS[value - 40])
+                self.current_style = replace(
+                    self.current_style, bg=ANSI_16_COLORS[value - 40]
+                )
             elif value == 49:
                 self.current_style = replace(self.current_style, bg=None)
             elif 90 <= value <= 97:
-                self.current_style = replace(self.current_style, fg=ANSI_16_COLORS[8 + (value - 90)])
+                self.current_style = replace(
+                    self.current_style, fg=ANSI_16_COLORS[8 + (value - 90)]
+                )
             elif 100 <= value <= 107:
-                self.current_style = replace(self.current_style, bg=ANSI_16_COLORS[8 + (value - 100)])
+                self.current_style = replace(
+                    self.current_style, bg=ANSI_16_COLORS[8 + (value - 100)]
+                )
             elif value in {38, 48} and index + 1 < len(values):
                 is_foreground = value == 38
                 mode = values[index + 1]
                 if mode == 5 and index + 2 < len(values):
                     color = _xterm_256_color(values[index + 2])
-                    self.current_style = replace(self.current_style, fg=color) if is_foreground else replace(self.current_style, bg=color)
+                    self.current_style = (
+                        replace(self.current_style, fg=color)
+                        if is_foreground
+                        else replace(self.current_style, bg=color)
+                    )
                     index += 2
                 elif mode == 2 and index + 4 < len(values):
                     color = (
@@ -759,7 +846,11 @@ class TerminalEmulator:
                         _clamp(values[index + 3], 0, 255),
                         _clamp(values[index + 4], 0, 255),
                     )
-                    self.current_style = replace(self.current_style, fg=color) if is_foreground else replace(self.current_style, bg=color)
+                    self.current_style = (
+                        replace(self.current_style, fg=color)
+                        if is_foreground
+                        else replace(self.current_style, bg=color)
+                    )
                     index += 4
             index += 1
 
@@ -825,7 +916,9 @@ class TerminalEmulator:
         if self._wrap_pending:
             self.cursor_column = 0
             self._linefeed()
-        self._put_cell(TerminalCell(self._translate_character(char), self.current_style))
+        self._put_cell(
+            TerminalCell(self._translate_character(char), self.current_style)
+        )
 
     def _put_cell(self, cell: TerminalCell) -> None:
         row = self.screen[self.cursor_row]
@@ -840,7 +933,11 @@ class TerminalEmulator:
             self._wrap_pending = False
 
     def _translate_character(self, char: str) -> str:
-        return DEC_SPECIAL_GRAPHICS.get(char, char) if self._charsets[self._active_charset] == "0" else char
+        return (
+            DEC_SPECIAL_GRAPHICS.get(char, char)
+            if self._charsets[self._active_charset] == "0"
+            else char
+        )
 
     def _erase_in_display(self, mode: int) -> None:
         if mode == 0:
@@ -872,25 +969,33 @@ class TerminalEmulator:
 
     def _erase_characters(self, count: int) -> None:
         row = self.screen[self.cursor_row]
-        for column in range(self.cursor_column, min(self.columns, self.cursor_column + count)):
+        for column in range(
+            self.cursor_column, min(self.columns, self.cursor_column + count)
+        ):
             row[column] = TerminalCell()
 
     def _insert_characters(self, count: int) -> None:
         row = self.screen[self.cursor_row]
         count = min(count, self.columns - self.cursor_column)
-        row[self.cursor_column :] = [TerminalCell() for _ in range(count)] + row[self.cursor_column : self.columns - count]
+        row[self.cursor_column :] = [TerminalCell() for _ in range(count)] + row[
+            self.cursor_column : self.columns - count
+        ]
 
     def _delete_characters(self, count: int) -> None:
         row = self.screen[self.cursor_row]
         count = min(count, self.columns - self.cursor_column)
-        row[self.cursor_column :] = row[self.cursor_column + count :] + [TerminalCell() for _ in range(count)]
+        row[self.cursor_column :] = row[self.cursor_column + count :] + [
+            TerminalCell() for _ in range(count)
+        ]
 
     def _insert_lines(self, count: int) -> None:
         if not (self.top_margin <= self.cursor_row <= self.bottom_margin):
             return
         count = min(count, self.bottom_margin - self.cursor_row + 1)
         top = self.screen[: self.cursor_row]
-        middle = [self._blank_line() for _ in range(count)] + self.screen[self.cursor_row : self.bottom_margin - count + 1]
+        middle = [self._blank_line() for _ in range(count)] + self.screen[
+            self.cursor_row : self.bottom_margin - count + 1
+        ]
         self.screen = top + middle + self.screen[self.bottom_margin + 1 :]
 
     def _delete_lines(self, count: int) -> None:
@@ -898,7 +1003,9 @@ class TerminalEmulator:
             return
         count = min(count, self.bottom_margin - self.cursor_row + 1)
         top = self.screen[: self.cursor_row]
-        middle = self.screen[self.cursor_row + count : self.bottom_margin + 1] + [self._blank_line() for _ in range(count)]
+        middle = self.screen[self.cursor_row + count : self.bottom_margin + 1] + [
+            self._blank_line() for _ in range(count)
+        ]
         self.screen = top + middle + self.screen[self.bottom_margin + 1 :]
 
     def _set_scroll_region(self, top: int, bottom: int) -> None:
@@ -910,7 +1017,11 @@ class TerminalEmulator:
         for _ in range(count):
             removed = self.screen.pop(self.top_margin)
             self.screen.insert(self.bottom_margin, self._blank_line())
-            if self.top_margin == 0 and self.bottom_margin == self.rows - 1 and not self._alternate_active:
+            if (
+                self.top_margin == 0
+                and self.bottom_margin == self.rows - 1
+                and not self._alternate_active
+            ):
                 self._append_scrollback([removed])
 
     def _scroll_down(self, count: int) -> None:
@@ -961,7 +1072,8 @@ class InteractiveTerminal(QTextEdit):
         self.setUndoRedoEnabled(False)
         self.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByKeyboard | Qt.TextInteractionFlag.TextSelectableByMouse
+            Qt.TextInteractionFlag.TextSelectableByKeyboard
+            | Qt.TextInteractionFlag.TextSelectableByMouse
         )
         self.setPlaceholderText("Interactive ANSI/VT100 terminal")
         self._refresh_document(autoscroll=True)
@@ -1013,7 +1125,9 @@ class InteractiveTerminal(QTextEdit):
         key = event.key()
         modifiers = event.modifiers()
 
-        if modifiers == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier):
+        if modifiers == (
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+        ):
             if key == Qt.Key.Key_C:
                 self.copy()
                 event.accept()
@@ -1111,7 +1225,11 @@ class InteractiveTerminal(QTextEdit):
         if modifiers == Qt.KeyboardModifier.AltModifier and text:
             return "\x1b" + text
 
-        if modifiers in {Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier} and text:
+        if (
+            modifiers
+            in {Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier}
+            and text
+        ):
             return text
 
         return None

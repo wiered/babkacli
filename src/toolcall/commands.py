@@ -33,7 +33,9 @@ def ls(path: str = ".") -> dict[str, Any]:
         raise CommandExecutionError(f"Path is not a directory: {path}")
 
     entries = []
-    for entry in sorted(target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
+    for entry in sorted(
+        target.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())
+    ):
         entries.append(
             {
                 "name": entry.name,
@@ -110,15 +112,21 @@ def createFiles(files: list[dict[str, Any]]) -> dict[str, Any]:
     created = []
     for item in files:
         if not isinstance(item, dict):
-            raise CommandExecutionError("'files' must contain objects with 'path' and optional 'content'.")
+            raise CommandExecutionError(
+                "'files' must contain objects with 'path' and optional 'content'."
+            )
 
         raw_path = item.get("path")
         if not isinstance(raw_path, str) or not raw_path.strip():
-            raise CommandExecutionError("Each file must include a non-empty string 'path'.")
+            raise CommandExecutionError(
+                "Each file must include a non-empty string 'path'."
+            )
 
         content = item.get("content", "")
         if not isinstance(content, str):
-            raise CommandExecutionError("Each file 'content' must be a string when provided.")
+            raise CommandExecutionError(
+                "Each file 'content' must be a string when provided."
+            )
 
         target = resolve_within_workspace(raw_path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -227,7 +235,9 @@ def _codeact_wrap_top_level_expr_prints(source: str) -> str:
     return ast.unparse(tree)
 
 
-def codeact(code: str | None = None, code_lines: list[Any] | None = None) -> dict[str, Any]:
+def codeact(
+    code: str | None = None, code_lines: list[Any] | None = None
+) -> dict[str, Any]:
     """
     CodeAct-style action: run an arbitrary Python program in the workspace.
 
@@ -237,7 +247,9 @@ def codeact(code: str | None = None, code_lines: list[Any] | None = None) -> dic
     User source is passed on stdin so large scripts are not limited by OS command-line length.
     """
 
-    source = _codeact_wrap_top_level_expr_prints(_resolve_codeact_source(code, code_lines))
+    source = _codeact_wrap_top_level_expr_prints(
+        _resolve_codeact_source(code, code_lines)
+    )
 
     root = workspace_root()
     interp = _python_interpreter()
@@ -343,7 +355,9 @@ def dispatch_command(command: ParsedAgentCommand) -> CommandOutcome:
     handler = COMMAND_HANDLERS.get(command.command)
     if handler is None:
         allowed = ", ".join(sorted(AVAILABLE_COMMANDS))
-        raise CommandExecutionError(f"Unsupported command '{command.command}'. Allowed: {allowed}.")
+        raise CommandExecutionError(
+            f"Unsupported command '{command.command}'. Allowed: {allowed}."
+        )
 
     try:
         data = handler(**command.arguments)
@@ -360,5 +374,7 @@ def parse_and_dispatch_agent_response(raw_response: str) -> CommandOutcome:
 
     from .json_parser import parse_agent_response
 
-    parsed = parse_agent_response(raw_response, allowed_commands=set(AVAILABLE_COMMANDS))
+    parsed = parse_agent_response(
+        raw_response, allowed_commands=set(AVAILABLE_COMMANDS)
+    )
     return dispatch_command(parsed)

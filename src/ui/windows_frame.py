@@ -128,7 +128,9 @@ if os.name == "nt":
         ctypes.c_int,
         wintypes.UINT,
     ]
-    _LRESULT = ctypes.c_longlong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_long
+    _LRESULT = (
+        ctypes.c_longlong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_long
+    )
     _dwmapi = ctypes.windll.dwmapi
     _dwm_def_window_proc = _dwmapi.DwmDefWindowProc
     _dwm_def_window_proc.restype = wintypes.BOOL
@@ -149,7 +151,10 @@ if os.name == "nt":
     ]
     _dwm_extend_frame_into_client_area = _dwmapi.DwmExtendFrameIntoClientArea
     _dwm_extend_frame_into_client_area.restype = ctypes.c_long
-    _dwm_extend_frame_into_client_area.argtypes = [wintypes.HWND, ctypes.POINTER(MARGINS)]
+    _dwm_extend_frame_into_client_area.argtypes = [
+        wintypes.HWND,
+        ctypes.POINTER(MARGINS),
+    ]
 
     _SWP_NOMOVE = 0x0002
     _SWP_NOSIZE = 0x0001
@@ -197,10 +202,15 @@ def frame_border_thickness_for_window(window: QWidget) -> int:
         return 0
 
     hwnd = int(window.winId())
-    dpi = int(_get_dpi_for_window(hwnd)) if hwnd and _get_dpi_for_window is not None else None
+    dpi = (
+        int(_get_dpi_for_window(hwnd))
+        if hwnd and _get_dpi_for_window is not None
+        else None
+    )
     return max(
         0,
-        _system_metric(SM_CYSIZEFRAME, dpi=dpi) + _system_metric(SM_CXPADDEDBORDER, dpi=dpi),
+        _system_metric(SM_CYSIZEFRAME, dpi=dpi)
+        + _system_metric(SM_CXPADDEDBORDER, dpi=dpi),
     )
 
 
@@ -209,7 +219,11 @@ def caption_height_for_window(window: QWidget) -> int:
         return 0
 
     hwnd = int(window.winId())
-    dpi = int(_get_dpi_for_window(hwnd)) if hwnd and _get_dpi_for_window is not None else None
+    dpi = (
+        int(_get_dpi_for_window(hwnd))
+        if hwnd and _get_dpi_for_window is not None
+        else None
+    )
     return max(0, _system_metric(SM_CYCAPTION, dpi=dpi))
 
 
@@ -311,10 +325,17 @@ def restore_caption_style(window: QWidget) -> None:
     if hwnd == 0:
         return
     style = _get_window_long(hwnd, _GWL_STYLE)
-    style |= _WS_CAPTION | _WS_THICKFRAME | _WS_SYSMENU | _WS_MINIMIZEBOX | _WS_MAXIMIZEBOX
+    style |= (
+        _WS_CAPTION | _WS_THICKFRAME | _WS_SYSMENU | _WS_MINIMIZEBOX | _WS_MAXIMIZEBOX
+    )
     _set_window_long(hwnd, _GWL_STYLE, style)
     _set_window_pos(
-        hwnd, 0, 0, 0, 0, 0,
+        hwnd,
+        0,
+        0,
+        0,
+        0,
+        0,
         _SWP_NOMOVE | _SWP_NOSIZE | _SWP_NOZORDER | _SWP_NOACTIVATE | _SWP_FRAMECHANGED,
     )
 

@@ -15,11 +15,15 @@ def test_parse_agent_response_strips_code_fence_and_keeps_extra_fields():
 
     parsed = parse_agent_response(raw, allowed_commands={"ls"})
 
-    assert parsed == ParsedAgentCommand(command="ls", arguments={"path": ".", "extra": 1})
+    assert parsed == ParsedAgentCommand(
+        command="ls", arguments={"path": ".", "extra": 1}
+    )
 
 
 def test_parse_agent_response_rejects_unsupported_command():
-    with pytest.raises(AgentResponseParseError, match="Unsupported command 'writefile'"):
+    with pytest.raises(
+        AgentResponseParseError, match="Unsupported command 'writefile'"
+    ):
         parse_agent_response('{"command": "writefile"}', allowed_commands={"ls"})
 
 

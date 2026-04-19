@@ -9,7 +9,9 @@ from pathlib import Path
 
 from ..toolcall.errors import CommandExecutionError
 
-_workspace_override: ContextVar[Path | None] = ContextVar("babka_workspace_root", default=None)
+_workspace_override: ContextVar[Path | None] = ContextVar(
+    "babka_workspace_root", default=None
+)
 
 
 def workspace_root() -> Path:

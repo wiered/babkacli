@@ -185,7 +185,9 @@ class CodeActSearch:
 
             children: list[dict[str, Any]] = []
             try:
-                entries = sorted(p.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower()))
+                entries = sorted(
+                    p.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())
+                )
             except OSError:
                 node["children"] = []
                 return node

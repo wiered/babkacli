@@ -101,14 +101,18 @@ def parse_agent_response(
     try:
         payload = json.loads(json_text)
     except json.JSONDecodeError as exc:
-        raise AgentResponseParseError(f"Invalid JSON agent response: {exc.msg}") from exc
+        raise AgentResponseParseError(
+            f"Invalid JSON agent response: {exc.msg}"
+        ) from exc
 
     if not isinstance(payload, dict):
         raise AgentResponseParseError("Agent response must be a JSON object.")
 
     command = payload.get("command")
     if not isinstance(command, str) or not command.strip():
-        raise AgentResponseParseError("Agent response must include a non-empty string 'command'.")
+        raise AgentResponseParseError(
+            "Agent response must include a non-empty string 'command'."
+        )
 
     normalized_command = command.strip()
     if allowed_commands is not None and normalized_command not in allowed_commands:

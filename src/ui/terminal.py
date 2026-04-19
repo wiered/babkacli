@@ -28,7 +28,9 @@ _ANSI_CSI_RE: Final[re.Pattern[str]] = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _ANSI_OSC_RE: Final[re.Pattern[str]] = re.compile(r"\x1b\][^\x07]*(?:\x07|\x1b\\)")
 _ANSI_SS3_RE: Final[re.Pattern[str]] = re.compile(r"\x1bO.")
 _CHA_TO_FIRST_COLUMN_RE: Final[re.Pattern[str]] = re.compile(r"\x1b\[(?:0|1)?G")
-_SHELL_PROMPT_LINE_RE: Final[re.Pattern[str]] = re.compile(r"(?m)^(?:pwsh>|PS [^\r\n>]+>)\s*")
+_SHELL_PROMPT_LINE_RE: Final[re.Pattern[str]] = re.compile(
+    r"(?m)^(?:pwsh>|PS [^\r\n>]+>)\s*"
+)
 _WINPTY_AVAILABLE: Final[bool] = os.name == "nt" and PtyProcess is not None
 
 
@@ -326,7 +328,9 @@ class TerminalController(QObject):
             process_environment.insert(key, value)
         self._process.setProcessEnvironment(process_environment)
         self._process.setWorkingDirectory(cwd)
-        self._process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
+        self._process.setProcessChannelMode(
+            QProcess.ProcessChannelMode.SeparateChannels
+        )
         self._process.readyReadStandardOutput.connect(self._read_stdout)
         self._process.readyReadStandardError.connect(self._read_stderr)
         self._process.errorOccurred.connect(self._handle_error)
@@ -358,7 +362,9 @@ class TerminalController(QObject):
             return
 
         self._reader_stop.clear()
-        self._reader_thread = threading.Thread(target=self._read_winpty_output, daemon=True)
+        self._reader_thread = threading.Thread(
+            target=self._read_winpty_output, daemon=True
+        )
         self._reader_thread.start()
         self._backend = "winpty"
         self.started.emit(self._backend)
@@ -448,14 +454,18 @@ class TerminalController(QObject):
     def _read_stdout(self) -> None:
         if self._process is None:
             return
-        data = bytes(self._process.readAllStandardOutput()).decode("utf-8", errors="replace")
+        data = bytes(self._process.readAllStandardOutput()).decode(
+            "utf-8", errors="replace"
+        )
         if data:
             self.output_ready.emit(data)
 
     def _read_stderr(self) -> None:
         if self._process is None:
             return
-        data = bytes(self._process.readAllStandardError()).decode("utf-8", errors="replace")
+        data = bytes(self._process.readAllStandardError()).decode(
+            "utf-8", errors="replace"
+        )
         if data:
             self.output_ready.emit(data)
 

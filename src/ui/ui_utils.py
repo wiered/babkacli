@@ -115,7 +115,13 @@ def _resolve_safe_monospace_fallback(requested: str | None) -> str | None:
     if requested.casefold() not in _LEGACY_FIXEDSYS_STYLE_FAMILIES:
         return requested
     db = QFontDatabase()
-    for name in ("Consolas", "Cascadia Mono", "Cascadia Code", "Lucida Console", "Courier New"):
+    for name in (
+        "Consolas",
+        "Cascadia Mono",
+        "Cascadia Code",
+        "Lucida Console",
+        "Courier New",
+    ):
         if db.hasFamily(name):
             return name
     return "Courier New"
@@ -139,7 +145,11 @@ def _load_bundled_jetbrains_nerd_font_family() -> str | None:
         fid = QFontDatabase.addApplicationFont(str(path))
     else:
         try:
-            data = resources.files("src.ui").joinpath("fonts", _BUNDLED_JETBRAINS_TTF).read_bytes()
+            data = (
+                resources.files("src.ui")
+                .joinpath("fonts", _BUNDLED_JETBRAINS_TTF)
+                .read_bytes()
+            )
         except (OSError, TypeError, ValueError):
             _bundled_jetbrains_family = None
             return None

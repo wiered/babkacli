@@ -35,8 +35,18 @@ def test_ls_lists_directories_before_files_sorted_case_insensitively(workspace):
     result = ls()
 
     assert result["path"] == "."
-    assert [entry["name"] for entry in result["entries"]] == ["A-dir", "b-dir", "A.txt", "z.txt"]
-    assert [entry["type"] for entry in result["entries"]] == ["dir", "dir", "file", "file"]
+    assert [entry["name"] for entry in result["entries"]] == [
+        "A-dir",
+        "b-dir",
+        "A.txt",
+        "z.txt",
+    ]
+    assert [entry["type"] for entry in result["entries"]] == [
+        "dir",
+        "dir",
+        "file",
+        "file",
+    ]
 
 
 def test_readfiles_reads_multiple_files(workspace):
@@ -59,7 +69,11 @@ def test_readfiles_reads_multiple_files(workspace):
 def test_writefile_creates_parent_directories_and_reports_bytes(workspace):
     result = writefile("nested/out.txt", "hello")
 
-    assert result == {"path": str(Path("nested") / "out.txt"), "written": True, "bytes": 5}
+    assert result == {
+        "path": str(Path("nested") / "out.txt"),
+        "written": True,
+        "bytes": 5,
+    }
     assert (workspace / "nested" / "out.txt").read_text(encoding="utf-8") == "hello"
 
 
@@ -86,20 +100,24 @@ def test_createFiles_creates_multiple_files_and_defaults_empty_content(workspace
 
     assert result == {
         "files": [
-            {"path": str(Path("src") / "main.py"), "written": True, "bytes": len("print('hi')\n".encode("utf-8"))},
+            {
+                "path": str(Path("src") / "main.py"),
+                "written": True,
+                "bytes": len("print('hi')\n".encode("utf-8")),
+            },
             {"path": "README.md", "written": True, "bytes": 0},
         ]
     }
-    assert (workspace / "src" / "main.py").read_text(encoding="utf-8") == "print('hi')\n"
+    assert (workspace / "src" / "main.py").read_text(
+        encoding="utf-8"
+    ) == "print('hi')\n"
     assert (workspace / "README.md").read_text(encoding="utf-8") == ""
 
 
 def test_runpy_executes_python_files_and_captures_output(workspace):
     script = workspace / "main.py"
     script.write_text(
-        "import sys\n"
-        "print('hello from script')\n"
-        "print(sys.argv[1:])\n",
+        "import sys\nprint('hello from script')\nprint(sys.argv[1:])\n",
         encoding="utf-8",
     )
 
@@ -218,7 +236,7 @@ def test_parse_and_dispatch_executes_codeact(monkeypatch):
             {
                 "command": "codeact",
                 "code": (
-                    'ca = CodeAct()\n'
+                    "ca = CodeAct()\n"
                     'ca.files.write("test_project/_codeact_dispatch_test.txt", "x")'
                 ),
             }
@@ -264,13 +282,17 @@ def test_done_rejects_blank_result():
 
 
 def test_dispatch_command_returns_normalized_outcome():
-    outcome = dispatch_command(ParsedAgentCommand(command="done", arguments={"result": "ok"}))
+    outcome = dispatch_command(
+        ParsedAgentCommand(command="done", arguments={"result": "ok"})
+    )
 
     assert outcome == CommandOutcome(command="done", data={"result": "ok"})
 
 
 def test_parse_and_dispatch_agent_response_executes_command(workspace):
-    outcome = parse_and_dispatch_agent_response('{"command": "writefile", "path": "a.txt", "content": "x"}')
+    outcome = parse_and_dispatch_agent_response(
+        '{"command": "writefile", "path": "a.txt", "content": "x"}'
+    )
 
     assert outcome.command == "writefile"
     assert outcome.data["written"] is True

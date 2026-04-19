@@ -92,7 +92,11 @@ def list_saved_chats(workspace: Path) -> list[tuple[str, float, str]]:
         title = chat_id
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and isinstance(data.get("title"), str) and data["title"].strip():
+            if (
+                isinstance(data, dict)
+                and isinstance(data.get("title"), str)
+                and data["title"].strip()
+            ):
                 title = data["title"].strip()
         except (OSError, json.JSONDecodeError, TypeError):
             pass
@@ -117,7 +121,11 @@ def list_archived_chats(workspace: Path) -> list[tuple[str, float, str]]:
         title = chat_id
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, dict) and isinstance(data.get("title"), str) and data["title"].strip():
+            if (
+                isinstance(data, dict)
+                and isinstance(data.get("title"), str)
+                and data["title"].strip()
+            ):
                 title = data["title"].strip()
         except (OSError, json.JSONDecodeError, TypeError):
             pass
@@ -214,6 +222,7 @@ def chat_events_from_json(items: list[dict[str, Any]]) -> list[ChatEvent]:
         step = step_v if isinstance(step_v, int) else None
         total_v = raw.get("total")
         total = total_v if isinstance(total_v, int) else None
+
         def _opt_int(key: str) -> int | None:
             v = raw.get(key)
             if isinstance(v, bool) or v is None:
@@ -275,7 +284,11 @@ def save_chat_session(
     """Write the full chat state under the user ``.babka`` chats tree (active or archive)."""
     mode_norm = normalize_mode(mode)
     t = (title or "").strip() or derive_title(messages, chat_events)
-    path = archived_chat_file_path(workspace, chat_id) if stored_in_archive else chat_file_path(workspace, chat_id)
+    path = (
+        archived_chat_file_path(workspace, chat_id)
+        if stored_in_archive
+        else chat_file_path(workspace, chat_id)
+    )
     created = _utc_now_iso()
     try:
         if path.is_file():
@@ -286,9 +299,21 @@ def save_chat_session(
         pass
 
     ut = usage_totals or {}
-    prompt_tok = int(ut.get("prompt_tokens", 0)) if isinstance(ut.get("prompt_tokens"), (int, float)) else 0
-    completion_tok = int(ut.get("completion_tokens", 0)) if isinstance(ut.get("completion_tokens"), (int, float)) else 0
-    total_tok = int(ut.get("total_tokens", 0)) if isinstance(ut.get("total_tokens"), (int, float)) else 0
+    prompt_tok = (
+        int(ut.get("prompt_tokens", 0))
+        if isinstance(ut.get("prompt_tokens"), (int, float))
+        else 0
+    )
+    completion_tok = (
+        int(ut.get("completion_tokens", 0))
+        if isinstance(ut.get("completion_tokens"), (int, float))
+        else 0
+    )
+    total_tok = (
+        int(ut.get("total_tokens", 0))
+        if isinstance(ut.get("total_tokens"), (int, float))
+        else 0
+    )
 
     payload = {
         "version": FORMAT_VERSION,
@@ -307,7 +332,9 @@ def save_chat_session(
             "total_tokens": total_tok,
         },
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def load_chat_session(workspace: Path, chat_id: str) -> dict[str, Any]:
@@ -336,7 +363,9 @@ def load_chat_session(workspace: Path, chat_id: str) -> dict[str, Any]:
     chat_events = chat_events_from_json([e for e in raw_events if isinstance(e, dict)])
 
     collapsed = data.get("collapsed_blocks", [])
-    collapsed_blocks: set[str] = set(collapsed) if isinstance(collapsed, list) else set()
+    collapsed_blocks: set[str] = (
+        set(collapsed) if isinstance(collapsed, list) else set()
+    )
 
     nb = data.get("next_block_id", 1)
     next_block_id = int(nb) if isinstance(nb, (int, float)) else 1

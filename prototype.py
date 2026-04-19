@@ -11,9 +11,9 @@ _ROOT = Path(__file__).resolve().parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QMouseEvent, QShowEvent
-from PySide6.QtWidgets import (
+from PySide6.QtCore import Qt, QSize  # noqa: E402
+from PySide6.QtGui import QMouseEvent, QShowEvent  # noqa: E402
+from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QLabel,
     QMainWindow,
@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.ui.native_chrome_win32 import LowLevelNativeChromeMixin
+from src.ui.native_chrome_win32 import LowLevelNativeChromeMixin  # noqa: E402
 
 
 class DemoWindow(QMainWindow, LowLevelNativeChromeMixin):

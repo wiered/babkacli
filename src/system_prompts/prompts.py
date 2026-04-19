@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from textwrap import dedent
 
-MODES = [
-    "ask",
-    "agent"
-]
+MODES = ["ask", "agent"]
 
 
 LS_PROMPT = dedent(
@@ -247,6 +244,7 @@ def build_system_prompt_for_mode(mode: str) -> str:
 
     normalized_mode = mode.strip().lower()
     return build_system_prompt(mode=normalized_mode)
+
 
 if __name__ == "__main__":
     print(build_system_prompt_for_mode("agent"))
