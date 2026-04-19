@@ -21,14 +21,19 @@ if __package__ in {None, ""}:
     sys.path.append(str(Path(__file__).resolve().parents[1]))
 
     from src.system_prompts.prompts import build_system_prompt_for_mode
-    from src.toolcall.commands import CommandExecutionError, parse_and_dispatch_agent_response
+    from src.toolcall.commands import (
+        CommandExecutionError,
+        parse_and_dispatch_agent_response,
+    )
     from src.toolcall.json_parser import AgentResponseParseError
 else:
     from .system_prompts.prompts import build_system_prompt_for_mode
-    from .toolcall.commands import CommandExecutionError, parse_and_dispatch_agent_response
+    from .toolcall.commands import (
+        CommandExecutionError,
+        parse_and_dispatch_agent_response,
+    )
     from .toolcall.json_parser import AgentResponseParseError
 
-from dotenv import load_dotenv
 load_dotenv()
 DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
 
