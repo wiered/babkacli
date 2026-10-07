@@ -169,11 +169,20 @@ class _FakePtyProcess:
 
 
 def test_allowed_commands_for_ask_mode_are_read_only():
-    assert _allowed_commands_for_mode("ask") == {"done", "ls", "readfiles"}
+    assert _allowed_commands_for_mode("ask") == {
+        "done",
+        "ls",
+        "readfiles",
+        "mcp_list_tools",
+        "mcp_read",
+    }
 
 
 def test_allowed_commands_for_agent_mode_include_write_actions():
     assert _allowed_commands_for_mode("agent") == {
+        "mcp_list_tools",
+        "mcp_read",
+        "mcp_call",
         "codeact",
         "createFiles",
         "createFolders",

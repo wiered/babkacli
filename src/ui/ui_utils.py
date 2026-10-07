@@ -14,8 +14,11 @@ from ..system_prompts.prompts import build_system_prompt_for_mode
 ENDPOINT = "https://models.github.ai/inference"
 SUPPORTED_MODES = ("ask", "agent")
 ALLOWED_COMMANDS_BY_MODE: dict[str, set[str]] = {
-    "ask": {"done", "ls", "readfiles"},
+    "ask": {"done", "ls", "readfiles", "mcp_list_tools", "mcp_read"},
     "agent": {
+        "mcp_list_tools",
+        "mcp_call",
+        "mcp_read",
         "codeact",
         "createFiles",
         "createFolders",

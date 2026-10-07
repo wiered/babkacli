@@ -336,6 +336,35 @@ def runpy(path: str, args: list[str] | None = None) -> dict[str, Any]:
     }
 
 
+def mcp_list_tools(arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Discover actual tool descriptions and JSON schemas from readdocs."""
+    from ..utils.mcp_client import request
+
+    if arguments is not None and (not isinstance(arguments, dict) or arguments):
+        raise CommandExecutionError("'mcp_list_tools' accepts only empty 'arguments'.")
+    return request("list")
+
+
+def mcp_call(tool: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Call a tool on the configured readdocs server."""
+    from ..utils.mcp_client import request
+
+    if not isinstance(tool, str) or not tool.strip():
+        raise CommandExecutionError("'tool' must be a non-empty string.")
+    if arguments is not None and not isinstance(arguments, dict):
+        raise CommandExecutionError("'arguments' must be a JSON object.")
+    return request("call", tool, arguments)
+
+
+def mcp_read(tool: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Allow only known read-only documentation tools in ask mode."""
+    from ..utils.mcp_client import READ_ONLY_TOOLS
+
+    if not isinstance(tool, str) or tool not in READ_ONLY_TOOLS:
+        raise CommandExecutionError("This MCP tool is not allowed in read-only mode.")
+    return mcp_call(tool, arguments)
+
+
 def done(result: str) -> dict[str, Any]:
     """Return the final result for the user."""
 
@@ -345,6 +374,9 @@ def done(result: str) -> dict[str, Any]:
 
 
 COMMAND_HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {
+    "mcp_list_tools": mcp_list_tools,
+    "mcp_call": mcp_call,
+    "mcp_read": mcp_read,
     "codeact": codeact,
     "createFiles": createFiles,
     "createFolders": createFolders,
