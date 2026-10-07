@@ -605,3 +605,21 @@ def test_interactive_terminal_emulator_reports_cursor_position():
     responses = emulator.feed("abc\x1b[6n")
 
     assert responses == ["\x1b[1;4R"]
+
+
+def test_model_selector_switches_model_and_locks_while_busy(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    assert app is not None
+    window = AgentStudioWindow(workspace=tmp_path, model="gemma4:latest", max_steps=8)
+    try:
+        window._model_selector.setCurrentText("deepseek-flash")
+        assert window._model == "deepseek-flash"
+        assert "deepseek-flash" in window._title_bar._model_badge.text()
+        window._set_busy(True)
+        assert not window._model_selector.isEnabled()
+        window._set_busy(False)
+        assert window._model_selector.isEnabled()
+        window._model_selector.setCurrentText("gemma4:latest")
+        assert window._model == "gemma4:latest"
+    finally:
+        window.close()

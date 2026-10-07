@@ -65,7 +65,7 @@ class AgentWorker(QObject):
 
     def run(self) -> None:
         try:
-            client = build_client()
+            client = build_client(self._model)
             workspace = self._workspace
             messages = self._messages
             allowed_commands = allowed_commands_for_mode(self._mode)

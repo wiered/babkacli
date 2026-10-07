@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-import os
 
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from src.utils.ai import default_model
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
@@ -46,7 +46,7 @@ else:
     )
 
 load_dotenv()
-DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+DEFAULT_MODEL = default_model()
 DEFAULT_MAX_STEPS = 8
 
 
@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
-        help="GitHub Models model name. Defaults to openai/gpt-4o.",
+        help="LLM model: gemma4:latest, deepseek-flash or deepseek-v4-pro (default: AI_MODEL).",
     )
     parser.add_argument(
         "--max-steps",

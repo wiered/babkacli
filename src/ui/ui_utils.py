@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtGui import QFont, QFontDatabase
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage
-from azure.core.credentials import AzureKeyCredential
+from ..utils.ai import build_client as build_client, complete
 
 from ..system_prompts.prompts import build_system_prompt_for_mode
 
@@ -42,13 +42,6 @@ def normalize_mode(mode: str) -> str:
     return normalized
 
 
-def build_client() -> ChatCompletionsClient:
-    return ChatCompletionsClient(
-        endpoint=ENDPOINT,
-        credential=AzureKeyCredential(_get_token()),
-    )
-
-
 def allowed_commands_for_mode(mode: str) -> set[str]:
     normalized = normalize_mode(mode)
     return set(ALLOWED_COMMANDS_BY_MODE[normalized])
@@ -74,12 +67,7 @@ def call_model(
     messages: list[Any],
     model: str,
 ) -> tuple[str, dict[str, int] | None]:
-    response = client.complete(
-        messages=messages,
-        model=model,
-        temperature=0.2,
-        response_format="json_object",
-    )
+    response = complete(client, messages=messages, model=model)
 
     message = response.choices[0].message
     content = message.content if message and message.content else ""

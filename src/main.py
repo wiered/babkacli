@@ -1,4 +1,4 @@
-"""Interactive GitHub Models agent for the workspace."""
+"""Interactive LLM agent for the workspace."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from typing import Any
 
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import AssistantMessage, SystemMessage, UserMessage
-from azure.core.credentials import AzureKeyCredential
+from src.utils.ai import build_client, complete, default_model
 from dotenv import load_dotenv
 
 if __package__ in {None, ""}:
@@ -35,7 +35,7 @@ else:
     from .toolcall.json_parser import AgentResponseParseError
 
 load_dotenv()
-DEFAULT_MODEL = os.getenv("GITHUB_MODEL", "openai/gpt-4o")
+DEFAULT_MODEL = default_model()
 
 ENDPOINT = "https://models.github.ai/inference"
 DEFAULT_MAX_STEPS = 8
@@ -65,11 +65,8 @@ def _format_json(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 
-def _build_client() -> ChatCompletionsClient:
-    return ChatCompletionsClient(
-        endpoint=ENDPOINT,
-        credential=AzureKeyCredential(_get_token()),
-    )
+def _build_client(model: str | None = None) -> ChatCompletionsClient:
+    return build_client(model)
 
 
 def _build_messages() -> list[Any]:
@@ -82,12 +79,7 @@ def _call_model(
     messages: list[Any],
     model: str,
 ) -> str:
-    response = client.complete(
-        messages=messages,
-        model=model,
-        temperature=0.2,
-        response_format="json_object",
-    )
+    response = complete(client, messages=messages, model=model)
 
     message = response.choices[0].message
     content = message.content if message and message.content else ""
@@ -137,7 +129,7 @@ def _execute_agent_turn(
 def run_repl(*, workspace: Path, model: str, max_steps: int) -> int:
     os.chdir(workspace)
 
-    client = _build_client()
+    client = _build_client(model)
     messages = _build_messages()
 
     print(f"Workspace: {workspace}")
@@ -212,7 +204,7 @@ def _print_root_help() -> None:
 def build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="babkacli cli",
-        description="Interactive GitHub Models agent that can inspect and edit the workspace.",
+        description="Interactive LLM agent that can inspect and edit the workspace.",
     )
     parser.add_argument(
         "--workspace",
@@ -222,7 +214,7 @@ def build_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model",
         default=DEFAULT_MODEL,
-        help="GitHub Models model name. Defaults to openai/gpt-5.",
+        help="LLM model: gemma4:latest, deepseek-flash or deepseek-v4-pro (default: AI_MODEL).",
     )
     parser.add_argument(
         "--max-steps",
@@ -247,7 +239,7 @@ def _run_ui(argv: list[str]) -> int:
 def _run_once(*, task: str, workspace: Path, model: str, max_steps: int) -> int:
     os.chdir(workspace)
 
-    client = _build_client()
+    client = _build_client(model)
     messages = _build_messages()
     messages.append(UserMessage(task))
 

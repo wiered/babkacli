@@ -10,6 +10,7 @@ from PySide6.QtCore import QEvent, Qt, Signal, Slot
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QMoveEvent, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import QWidget
+from ..utils.config import debug_colors_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,8 @@ if _USE_WEBVIEW2:
                 "background-color: "
                 f"{_DEBUG_NATIVE_HOST_BG};"
                 f"border: 2px solid {_DEBUG_NATIVE_HOST_BORDER};"
+            ) if debug_colors_enabled() else self.setStyleSheet(
+                f"background-color: {_BG_COLOR}; border: none;"
             )
             self.winId()
 
@@ -136,8 +139,8 @@ if _USE_WEBVIEW2:
             )
 
             self._webview.Visible = self.isVisible()
-            core_webview.DOMContentLoaded += (
-                lambda sender, args: self.bridge.domContentLoaded.emit()
+            core_webview.DOMContentLoaded += lambda sender, args: (
+                self.bridge.domContentLoaded.emit()
             )
 
             if self.wsgi_app:
@@ -235,6 +238,8 @@ class ChatWebView(QWidget):
             "background-color: "
             f"{_DEBUG_CHAT_VIEW_BG};"
             f"border: 2px solid {_DEBUG_CHAT_VIEW_BORDER};"
+        ) if debug_colors_enabled() else self.setStyleSheet(
+            f"background-color: {_BG_COLOR}; border: none;"
         )
 
         if _USE_WEBVIEW2:
@@ -245,7 +250,6 @@ class ChatWebView(QWidget):
             def on_link_click(url: str) -> None:
                 self.link_activated.emit(url)
 
-            self.setStyleSheet(f"background-color: {_BG_COLOR};")
             self._native_host = _ChatNativeHost(self)
             self._webview = _ChatQtWebView2Widget(
                 parent=self._native_host,
@@ -263,6 +267,8 @@ class ChatWebView(QWidget):
             self._webview.setStyleSheet(
                 f"background: {_DEBUG_NATIVE_HOST_BG};"
                 f"border: 2px solid {_DEBUG_NATIVE_HOST_BORDER};"
+            ) if debug_colors_enabled() else self._webview.setStyleSheet(
+                f"background-color: {_BG_COLOR}; border: none;"
             )
             self._page.link_activated.connect(self.link_activated)
             self._webview.loadFinished.connect(self.content_loaded)

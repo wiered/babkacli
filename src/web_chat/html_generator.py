@@ -1,5 +1,6 @@
 import html
 import re
+from src.utils.config import debug_colors_enabled
 from pathlib import Path
 
 if __package__ in {None, ""}:
@@ -239,6 +240,13 @@ def render_chat_history(
     _mono = monospace_font_stack_css()
 
     copy_store: dict[str, str] = {}
+    body_background = _BG
+    body_border = "none"
+    if debug_colors_enabled():
+        body_background = (
+            "linear-gradient(rgba(255, 0, 255, 0.14), rgba(255, 0, 255, 0.14)), " + _BG
+        )
+        body_border = "3px solid #ff00ff"
 
     html_parts = [
         f"""<html>
@@ -249,14 +257,12 @@ def render_chat_history(
   body {{
     margin: 0;
     padding: 20px 20px 16px 20px;
-    background:
-      linear-gradient(rgba(255, 0, 255, 0.14), rgba(255, 0, 255, 0.14)),
-      {_BG};
+    background: {body_background};
     color: {_TEXT};
     font-family: {_FONT_UI};
     font-size: 13.5px;
     line-height: 1.65;
-    border: 3px solid #ff00ff;
+    border: {body_border};
   }}
 
   code {{

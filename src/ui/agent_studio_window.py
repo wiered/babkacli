@@ -5,13 +5,25 @@ from __future__ import annotations
 import json
 import logging
 import time
+from src.utils.config import debug_colors_enabled
+from src.utils.ai import SELECTABLE_MODELS
 
 import sys
 from pathlib import Path
 from typing import Any
 
 from azure.ai.inference.models import UserMessage
-from PySide6.QtCore import QDir, QModelIndex, QPoint, QRect, QSize, Qt, QThread, QTimer, QEvent
+from PySide6.QtCore import (
+    QDir,
+    QModelIndex,
+    QPoint,
+    QRect,
+    QSize,
+    Qt,
+    QThread,
+    QTimer,
+    QEvent,
+)
 from PySide6.QtGui import (
     QAction,
     QColor,
@@ -27,6 +39,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileSystemModel,
     QFrame,
     QHBoxLayout,
@@ -647,20 +660,30 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
         ch_layout.setContentsMargins(14, 0, 14, 0)
         ch_layout.setSpacing(8)
         ch_layout.addWidget(chat_hdr_label, 1)
+        self._model_selector = QComboBox(self)
+        self._model_selector.setAccessibleName("LLM model")
+        self._model_selector.setToolTip("Модель: локальная Ollama или DeepSeek API")
+        self._model_selector.addItems(
+            list(dict.fromkeys((*SELECTABLE_MODELS, self._model)))
+        )
+        self._model_selector.setCurrentText(self._model)
+        self._model_selector.currentTextChanged.connect(self._handle_model_changed)
+        ch_layout.addWidget(self._model_selector)
 
         chat_panel = QWidget(self)
         chat_panel.setObjectName("chatPanel")
-        chat_panel.setStyleSheet(
-            "background-color: rgba(255, 0, 0, 0.12);"
-            "border-left: 3px solid #ff3b30;"
-        )
+        if debug_colors_enabled():
+            chat_panel.setStyleSheet(
+                "background-color: rgba(255, 0, 0, 0.12);"
+                "border-left: 3px solid #ff3b30;"
+            )
 
         self._chat_web_container = _ChatWebContainer(chat_panel)
         self._chat_web_container.setObjectName("chatWebContainer")
-        self._chat_web_container.setStyleSheet(
-            "background-color: rgba(57, 255, 20, 0.14);"
-            "border: 2px solid #39ff14;"
-        )
+        if debug_colors_enabled():
+            self._chat_web_container.setStyleSheet(
+                "background-color: rgba(57, 255, 20, 0.14);border: 2px solid #39ff14;"
+            )
 
         self._chat_view = ChatWebView(self._chat_web_container)
         self._chat_view.link_activated.connect(self._handle_chat_anchor_clicked)
@@ -1299,7 +1322,15 @@ class AgentStudioWindow(QMainWindow, LowLevelNativeChromeMixin):
 
     # ── Busy state ─────────────────────────────────────────────────────────────
 
+    def _handle_model_changed(self, model: str) -> None:
+        self._model = model
+        if self._title_bar is not None:
+            self._title_bar.set_metadata(
+                title="BabkaCode", workspace=str(self._workspace), model=model
+            )
+
     def _set_busy(self, busy: bool) -> None:
+        self._model_selector.setEnabled(not busy)
         self._prompt_input.set_busy(busy)
         self._chat_history_panel.setDisabled(busy)
 
