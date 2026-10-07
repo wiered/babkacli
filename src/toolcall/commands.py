@@ -353,6 +353,16 @@ def mcp_call(tool: str, arguments: dict[str, Any] | None = None) -> dict[str, An
         raise CommandExecutionError("'tool' must be a non-empty string.")
     if arguments is not None and not isinstance(arguments, dict):
         raise CommandExecutionError("'arguments' must be a JSON object.")
+    if tool == "search_in_file" and (not arguments or not arguments.get("page_url")):
+        raise CommandExecutionError(
+            "search_in_file requires a known 'page_url', not 'source_base'. "
+            "No search was performed. For an unknown page, call tool 'search' "
+            "with 'query' and 'source_base' to discover matching page URLs, "
+            "or use 'list_documentation_pages' with 'source_base'. "
+            "Then use a returned page URL for search_in_file. "
+            "Do not repeat this call with another source_base or ask the user "
+            "for a URL before trying page discovery."
+        )
     return request("call", tool, arguments)
 
 
@@ -401,6 +411,13 @@ def dispatch_command(command: ParsedAgentCommand) -> CommandOutcome:
         )
 
     try:
+        if command.command == "mcp_list_tools" and "tool" in command.arguments:
+            raise CommandExecutionError(
+                "mcp_list_tools lists tool schemas; it does not call a tool. "
+                'For discovery return exactly {"command":"mcp_list_tools"}. '
+                "To call a discovered tool, keep 'tool' and 'arguments' and use "
+                "command 'mcp_read' in ask mode or 'mcp_call' in agent mode."
+            )
         data = handler(**command.arguments)
     except TypeError as exc:
         raise CommandExecutionError(
