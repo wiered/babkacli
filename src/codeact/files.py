@@ -14,12 +14,28 @@ def resolve(path: str | Path) -> Path:
 
 
 class CodeActFiles:
-    def ls(self, path: str = ".", ignore: list[str] | None = None) -> dict[str, Any]:
+    def ls(
+        self,
+        path: str = ".",
+        ignore: list[str] | None = None,
+        *,
+        paths: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
-        List files and directories under a path.
+        List one directory, or multiple directories using ``paths``.
 
         Directories whose basenames appear in ``ignore`` are omitted.
         """
+        if paths is not None:
+            if path != ".":
+                raise CodeActFilesError("Use either 'path' or 'paths', not both.")
+            if not isinstance(paths, list) or not paths:
+                raise CodeActFilesError("'paths' must be a non-empty list.")
+            if not all(isinstance(item, str) and item.strip() for item in paths):
+                raise CodeActFilesError("'paths' must contain non-empty strings.")
+            return {
+                "directories": [self.ls(path=item, ignore=ignore) for item in paths]
+            }
         target = resolve(path)
         if not target.exists():
             raise CodeActFilesError(f"Path does not exist: {path}")

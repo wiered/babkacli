@@ -49,6 +49,27 @@ def test_ls_lists_directories_before_files_sorted_case_insensitively(workspace):
     ]
 
 
+def test_ls_lists_multiple_paths_in_one_command(workspace):
+    (workspace / "src").mkdir()
+    (workspace / "tests").mkdir()
+    (workspace / "src" / "main.py").write_text("", encoding="utf-8")
+    result = parse_and_dispatch_agent_response(
+        '{"command":"ls","paths":["tests","src"]}'
+    )
+    assert result.data == {"directories": [ls("tests"), ls("src")]}
+
+
+@pytest.mark.parametrize("paths", [[], "src", [""], [1]])
+def test_ls_rejects_invalid_paths(paths):
+    with pytest.raises(CommandExecutionError, match="'paths'"):
+        ls(paths=paths)
+
+
+def test_ls_batch_rejects_missing_directory(workspace):
+    with pytest.raises(CommandExecutionError, match="Path does not exist"):
+        ls(paths=[".", "missing"])
+
+
 def test_readfiles_reads_multiple_files(workspace):
     first = workspace / "first.txt"
     second = workspace / "nested" / "second.txt"

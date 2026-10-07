@@ -55,6 +55,27 @@ def test_codeact_ls_respects_ignore_for_directories(workspace):
     assert "note.txt" in names
 
 
+def test_codeact_ls_multiple_paths_applies_ignore(workspace):
+    for name in ["src", "tests"]:
+        (workspace / name / "skip").mkdir(parents=True)
+        (workspace / name / "keep.txt").write_text("", encoding="utf-8")
+    files = CodeAct().files
+    result = files.ls(paths=["tests", "src"], ignore=["skip"])
+    assert result == {
+        "directories": [files.ls(name, ignore=["skip"]) for name in ["tests", "src"]]
+    }
+    assert all(
+        [entry["name"] for entry in directory["entries"]] == ["keep.txt"]
+        for directory in result["directories"]
+    )
+
+
+@pytest.mark.parametrize("paths", [[], "src", [""], [1]])
+def test_codeact_ls_rejects_invalid_paths(paths):
+    with pytest.raises(CodeActFilesError, match="'paths'"):
+        CodeAct().files.ls(paths=paths)
+
+
 def test_codeact_read_and_write_round_trip(workspace):
     files = CodeAct().files
     files.write("nested/x.txt", "hello")

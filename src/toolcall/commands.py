@@ -23,8 +23,17 @@ class CommandOutcome:
     data: dict[str, Any]
 
 
-def ls(path: str = ".") -> dict[str, Any]:
-    """List files and directories under a path."""
+def ls(path: str = ".", *, paths: list[str] | None = None) -> dict[str, Any]:
+    """List one directory, or multiple directories in one call."""
+
+    if paths is not None:
+        if path != ".":
+            raise CommandExecutionError("Use either 'path' or 'paths', not both.")
+        if not isinstance(paths, list) or not paths:
+            raise CommandExecutionError("'paths' must be a non-empty list.")
+        if not all(isinstance(item, str) and item.strip() for item in paths):
+            raise CommandExecutionError("'paths' must contain non-empty strings.")
+        return {"directories": [ls(path=item) for item in paths]}
 
     target = resolve_within_workspace(path)
     if not target.exists():

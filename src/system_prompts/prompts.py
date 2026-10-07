@@ -12,7 +12,11 @@ LS_PROMPT = dedent(
     ls:
     - Use to inspect directories and discover files.
     - Input JSON:
-      {"command":"ls","path":"."}
+      {"command":"ls","paths":["src","tests"]}
+    - Prefer `paths` (a non-empty array of directory paths) to inspect several directories in one request.
+    - With `paths`, the result is {"directories":[{"path":"src","entries":[...]}, ...]} in request order.
+    - For a single directory, {"command":"ls","path":"."} still returns {"path":".","entries":[...]}.
+    - Use either `path` or `paths`.
     - `path` is optional. When omitted, use the current working directory.
     - Listings are unfiltered: mentally down-rank virtual environments and cache dirs (see global rules) when choosing what to inspect next.
     """
@@ -132,6 +136,7 @@ CODEACT_PROMPT = dedent(
     - Do not call non-existent `ca.*` methods — only `ca.files.*` and `ca.search.*` as documented below. **`ca.files` has no `findfiles`** — glob/substring file discovery is **`ca.search.findfiles` only**.
     - Do not `import ca` or `from ca.files import ...` — `ca` is **not** a Python package; it is a variable already injected into your program. Use only `ca.files.ls(...)`, `ca.search.readfolder(...)`, etc.
     - Do not iterate the return value of `ls` as if it were a list of entries — it is a dict; use `ca.files.ls(path)["entries"]` (and each item has `name`, `path`, `type`).
+    - Inspect several directories at once with `ca.files.ls(paths=["src", "tests"], ignore=["__pycache__", ".venv"])`; iterate result["directories"] and each directory's ["entries"]. Prefer this over repeated single-directory calls. `ignore` applies to every listing.
     - Do not arbitrarily truncate content (e.g. `text[:500]`, “first N files only”) unless the **user** explicitly asked for a short preview or summary; otherwise read what you need or use `readfolder` for a structured overview.
 
     `findfiles` vs `readfiles` (common mistakes):
