@@ -89,7 +89,7 @@ python -m src.ui
 
 ## Локальный MCP-сервер документации
 
-CLI и GUI могут обращаться к `readthedocs-mcp-server`
+CLI и GUI могут обращаться к [readthedocs-mcp-server](https://github.com/wiered/readthedocs-mcp-server)
 через stdio. Сервер запускается автоматически для каждого запроса и закрывается
 после ответа; SQLite-индекс сохраняется между вызовами. Отдельно запускать сервер
 или открывать HTTP-порт не требуется.
